@@ -9,6 +9,7 @@ const app = document.getElementById('app');
 let supabase;
 let session = null;
 let requests = [];
+let requestMessages = {};
 let selectedId = null;
 let activeView = 'list';
 let filters = { search: '', service: 'all', status: 'all' };
@@ -114,17 +115,190 @@ function renderListView(){
   const rows=filteredRequests(); const selected=requests.find(r=>r.id===selectedId)||rows[0];
   document.getElementById('contentArea').innerHTML=`<section class="leads-layout"><div class="table-card"><div class="table-head"><h2>Start With Us Submissions</h2><span class="muted">${rows.length} showing</span></div><div class="table-wrap"><table><thead><tr><th>Created</th><th>Customer</th><th>Business</th><th>Service</th><th>Consultation</th><th>Status</th></tr></thead><tbody>${rows.map(r=>`<tr data-id="${r.id}" class="${selected&&selected.id===r.id?'active':''}"><td>${formatDateTime(r.created_at)}</td><td><strong>${escapeHtml(fullName(r))}</strong><br><span class="muted">${escapeHtml(r.email||'')}</span></td><td>${escapeHtml(r.business_name||'')}</td><td>${escapeHtml(r.service_choice||'')}</td><td>${consultationLabel(r)}</td><td>${statusBadge(r.status)}</td></tr>`).join('')}</tbody></table></div></div><aside class="detail-card" id="detailCard">${detailHtml(selected)}</aside></section>`;
   document.querySelectorAll('tr[data-id]').forEach(row=>row.addEventListener('click',()=>{selectedId=Number(row.dataset.id);renderListView();}));
+  if(selected){
+  loadMessagesForRequest(selected.id).then(() => {
+    const detail = document.getElementById('detailCard');
+    if(detail) detail.innerHTML = detailHtml(selected);
+    bindDetailEvents();
+  });
+} else {
   bindDetailEvents();
+}
 }
 function detailHtml(r){
   if(!r)return`<div class="empty-detail">No submission selected.</div>`;
-  return `<div class="detail-head"><h2>${escapeHtml(fullName(r))}</h2>${statusBadge(r.status)}</div><div class="detail-body"><div class="detail-grid"><div class="info-box"><span>Email</span><a href="mailto:${escapeAttr(r.email||'')}">${escapeHtml(r.email||'')}</a></div><div class="info-box"><span>Phone</span><a href="tel:${escapeAttr(r.phone||'')}">${escapeHtml(r.phone||'Not provided')}</a></div><div class="info-box"><span>Business</span><strong>${escapeHtml(r.business_name||'')}</strong></div><div class="info-box"><span>Service</span><strong>${escapeHtml(r.service_choice||'')}</strong></div><div class="info-box"><span>Submitted</span><strong>${formatDateTime(r.created_at)}</strong></div><div class="info-box"><span>Consultation</span><strong>${consultationLabel(r)}</strong></div></div><label>Customer Message</label><div class="message-box">${escapeHtml(r.message||'No message provided.')}</div><div class="form-group"><label>Status</label><select id="statusEdit">${STATUS_OPTIONS.map(s=>`<option value="${s}" ${(r.status||'new')===s?'selected':''}>${titleCase(s)}</option>`).join('')}</select></div><div class="form-group"><label>Admin Notes</label><textarea id="notesEdit" placeholder="Internal notes...">${escapeHtml(r.admin_notes||'')}</textarea></div><div class="action-row"><button class="btn btn-primary" id="saveDetailBtn" data-id="${r.id}">Save Changes</button><button class="btn btn-danger" id="deleteDetailBtn" data-id="${r.id}">Delete</button></div><div class="notice" id="detailNotice"></div></div>`;
+
+  const msgs = requestMessages[r.id] || [];
+
+  return `
+    <div class="detail-head">
+      <h2>${escapeHtml(fullName(r))}</h2>
+      ${statusBadge(r.status)}
+    </div>
+
+    <div class="detail-body">
+      <div class="detail-grid">
+        <div class="info-box"><span>Email</span><a href="mailto:${escapeAttr(r.email||'')}">${escapeHtml(r.email||'')}</a></div>
+        <div class="info-box"><span>Phone</span><a href="tel:${escapeAttr(r.phone||'')}">${escapeHtml(r.phone||'Not provided')}</a></div>
+        <div class="info-box"><span>Business</span><strong>${escapeHtml(r.business_name||'')}</strong></div>
+        <div class="info-box"><span>Service</span><strong>${escapeHtml(r.service_choice||'')}</strong></div>
+        <div class="info-box"><span>Submitted</span><strong>${formatDateTime(r.created_at)}</strong></div>
+        <div class="info-box"><span>Consultation</span><strong>${consultationLabel(r)}</strong></div>
+      </div>
+
+      <label>Original Customer Message</label>
+      <div class="message-box">${escapeHtml(r.message||'No message provided.')}</div>
+
+      <div class="form-group">
+        <label>Status</label>
+        <select id="statusEdit">
+          ${STATUS_OPTIONS.map(s=>`<option value="${s}" ${(r.status||'new')===s?'selected':''}>${titleCase(s)}</option>`).join('')}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Admin Notes</label>
+        <textarea id="notesEdit" placeholder="Internal notes...">${escapeHtml(r.admin_notes||'')}</textarea>
+      </div>
+
+      <div class="action-row">
+        <button class="btn btn-primary" id="saveDetailBtn" data-id="${r.id}">Save Changes</button>
+        <button class="btn btn-danger" id="deleteDetailBtn" data-id="${r.id}">Delete</button>
+      </div>
+
+      <div class="notice" id="detailNotice"></div>
+
+      <div class="form-group" style="margin-top:1.5rem;">
+        <label>Customer Conversation</label>
+        <div class="message-box" id="conversationBox" style="max-height:260px;overflow:auto;">
+          ${
+            msgs.length
+              ? msgs.map(m => `
+                  <div style="margin-bottom:.9rem;padding:.85rem;border-radius:12px;background:${m.sender_role === 'admin' ? 'rgba(43,163,184,.14)' : 'rgba(255,255,255,.06)'};border:1px solid rgba(255,255,255,.10);">
+                    <strong style="color:${m.sender_role === 'admin' ? 'var(--teal-light)' : 'var(--gold-light)'};">
+                      ${m.sender_role === 'admin' ? 'RE IMAGE' : 'Customer'}
+                    </strong>
+                    <div style="margin-top:.35rem;line-height:1.5;">${escapeHtml(m.message)}</div>
+                    <small class="muted">${formatDateTime(m.created_at)}</small>
+                  </div>
+                `).join('')
+              : `<div class="muted">No conversation messages yet.</div>`
+          }
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Reply To Customer</label>
+        <textarea id="adminReplyText" placeholder="Type your reply here..."></textarea>
+      </div>
+
+      <button class="btn btn-primary" id="sendAdminReplyBtn" data-id="${r.id}" style="width:100%;">
+        Send Message
+      </button>
+
+      <div class="notice" id="messageNotice"></div>
+    </div>
+  `;
 }
+
 function bindDetailEvents(){
   const saveBtn=document.getElementById('saveDetailBtn');
-  if(saveBtn) saveBtn.addEventListener('click',async()=>{const id=Number(saveBtn.dataset.id);const notice=document.getElementById('detailNotice');notice.className='notice show';notice.textContent='Saving...';const {error}=await supabase.from('start_requests').update({status:document.getElementById('statusEdit').value,admin_notes:document.getElementById('notesEdit').value}).eq('id',id);if(error){notice.className='notice show error';notice.textContent=error.message;return;}await loadRequests();});
+
+  if(saveBtn) saveBtn.addEventListener('click',async()=>{
+    const id=Number(saveBtn.dataset.id);
+    const notice=document.getElementById('detailNotice');
+
+    notice.className='notice show';
+    notice.textContent='Saving...';
+
+    const {error}=await supabase
+      .from('start_requests')
+      .update({
+        status:document.getElementById('statusEdit').value,
+        admin_notes:document.getElementById('notesEdit').value
+      })
+      .eq('id',id);
+
+    if(error){
+      notice.className='notice show error';
+      notice.textContent=error.message;
+      return;
+    }
+
+    await loadRequests();
+  });
+
   const del=document.getElementById('deleteDetailBtn');
-  if(del) del.addEventListener('click',async()=>{if(!confirm('Delete this submission?'))return;const {error}=await supabase.from('start_requests').delete().eq('id',Number(del.dataset.id));if(error)alert(error.message);else{selectedId=null;await loadRequests();}});
+
+  if(del) del.addEventListener('click',async()=>{
+    if(!confirm('Delete this submission?'))return;
+
+    const {error}=await supabase
+      .from('start_requests')
+      .delete()
+      .eq('id',Number(del.dataset.id));
+
+    if(error) alert(error.message);
+    else{
+      selectedId=null;
+      await loadRequests();
+    }
+  });
+
+  const sendBtn = document.getElementById('sendAdminReplyBtn');
+
+  if(sendBtn) sendBtn.addEventListener('click', async () => {
+    const requestId = Number(sendBtn.dataset.id);
+    const textarea = document.getElementById('adminReplyText');
+    const notice = document.getElementById('messageNotice');
+    const message = textarea.value.trim();
+
+    if(!message){
+      notice.className = 'notice show error';
+      notice.textContent = 'Type a message first.';
+      return;
+    }
+
+    notice.className = 'notice show';
+    notice.textContent = 'Sending...';
+
+    const { error } = await supabase
+      .from('messages')
+      .insert([{
+        request_id: requestId,
+        sender_id: session.user.id,
+        sender_role: 'admin',
+        message
+      }]);
+
+    if(error){
+      notice.className = 'notice show error';
+      notice.textContent = error.message;
+      return;
+    }
+
+    textarea.value = '';
+    notice.textContent = 'Message sent.';
+
+    await loadMessagesForRequest(requestId);
+    renderListView();
+  });
+}
+
+async function loadMessagesForRequest(requestId){
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('request_id', requestId)
+    .order('created_at', { ascending: true });
+
+  if(error){
+    console.error('Message load failed:', error);
+    requestMessages[requestId] = [];
+    return;
+  }
+
+  requestMessages[requestId] = data || [];
 }
 
 function renderCalendarView(){
