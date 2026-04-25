@@ -149,3 +149,250 @@ body.modal-open{
     align-items:flex-start;
   }
 }
+/* ===== ADMIN MESSAGES PAGE ===== */
+
+.messages-page{
+  display:grid;
+  grid-template-columns:360px 1fr;
+  gap:1.2rem;
+  align-items:stretch;
+}
+
+.messages-sidebar,
+.messages-panel{
+  background:linear-gradient(145deg,rgba(255,255,255,.06),rgba(26,122,138,.055));
+  border:1px solid rgba(43,163,184,.20);
+  border-radius:24px;
+  overflow:hidden;
+  box-shadow:0 24px 80px rgba(0,0,0,.18);
+}
+
+.messages-top{
+  padding:1.2rem 1.35rem;
+  border-bottom:1px solid rgba(255,255,255,.08);
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:1rem;
+}
+
+.messages-top h2{
+  font-size:2rem;
+  line-height:.95;
+}
+
+.messages-list{
+  max-height:720px;
+  overflow:auto;
+  padding:.75rem;
+}
+
+.message-thread-row{
+  width:100%;
+  text-align:left;
+  border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.035);
+  color:#fff;
+  border-radius:18px;
+  padding:1rem;
+  margin-bottom:.75rem;
+  transition:.2s ease;
+}
+
+.message-thread-row:hover,
+.message-thread-row.active{
+  background:rgba(43,163,184,.13);
+  border-color:rgba(43,163,184,.35);
+  transform:translateY(-1px);
+}
+
+.thread-row-main{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:.75rem;
+  margin-bottom:.5rem;
+}
+
+.thread-row-main strong{
+  font-size:1rem;
+  color:#fff;
+}
+
+.thread-row-main span{
+  color:var(--gray);
+  font-size:.82rem;
+  font-weight:800;
+}
+
+.message-thread-row p{
+  color:var(--light-gray);
+  line-height:1.5;
+  font-size:.92rem;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+
+.thread-row-meta{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:.75rem;
+  margin-top:.75rem;
+}
+
+.thread-row-meta em{
+  color:var(--gold-light);
+  font-style:normal;
+  font-size:.72rem;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+
+.thread-row-meta small{
+  color:var(--gray);
+  font-weight:800;
+  font-size:.74rem;
+}
+
+.message-panel-head{
+  padding:1.35rem 1.5rem;
+  border-bottom:1px solid rgba(255,255,255,.08);
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:1rem;
+}
+
+.message-panel-head h2{
+  font-size:2.4rem;
+  line-height:.95;
+}
+
+.message-panel-actions{
+  display:flex;
+  gap:.7rem;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+
+.message-thread-box{
+  height:440px;
+  overflow:auto;
+  padding:1.5rem;
+  background:rgba(0,0,0,.08);
+}
+
+.chat-bubble{
+  width:min(680px,92%);
+  padding:1rem 1.1rem;
+  border-radius:18px;
+  margin-bottom:1rem;
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow:0 14px 35px rgba(0,0,0,.12);
+}
+
+.chat-bubble.customer{
+  margin-right:auto;
+  background:rgba(255,255,255,.055);
+}
+
+.chat-bubble.admin{
+  margin-left:auto;
+  background:linear-gradient(135deg,rgba(26,122,138,.32),rgba(13,90,104,.24));
+  border-color:rgba(43,163,184,.35);
+}
+
+.chat-bubble strong{
+  display:block;
+  color:var(--gold-light);
+  font-size:.78rem;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  margin-bottom:.4rem;
+}
+
+.chat-bubble.admin strong{
+  color:var(--teal-light);
+}
+
+.chat-bubble p{
+  color:#fff;
+  line-height:1.65;
+  white-space:pre-wrap;
+}
+
+.chat-bubble span{
+  display:block;
+  margin-top:.55rem;
+  color:var(--gray);
+  font-size:.76rem;
+  font-weight:800;
+}
+
+.message-reply-box{
+  padding:1.35rem 1.5rem;
+  border-top:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.025);
+}
+
+.message-reply-box textarea{
+  min-height:120px;
+  margin-bottom:.85rem;
+}
+
+.message-reply-box .btn{
+  width:100%;
+}
+
+@media(max-width:1100px){
+  .messages-page{
+    grid-template-columns:1fr;
+  }
+
+  .messages-list{
+    max-height:360px;
+  }
+
+  .message-thread-box{
+    height:420px;
+  }
+}
+
+@media(max-width:720px){
+  .messages-page{
+    gap:1rem;
+  }
+
+  .messages-top,
+  .message-panel-head,
+  .message-reply-box{
+    padding:1rem;
+  }
+
+  .message-panel-head{
+    flex-direction:column;
+  }
+
+  .message-panel-actions{
+    width:100%;
+    justify-content:stretch;
+  }
+
+  .message-panel-actions .btn{
+    flex:1;
+  }
+
+  .message-thread-box{
+    height:380px;
+    padding:1rem;
+  }
+
+  .chat-bubble{
+    width:100%;
+  }
+}
