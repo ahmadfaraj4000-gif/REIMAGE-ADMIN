@@ -1244,3 +1244,302 @@ body.modal-open{
     widows: 3 !important;
   }
 }
+/* ===== FIX MOBILE INVOICE UI + FORCE DESKTOP PDF PRINT ===== */
+
+/* Better mobile edit screen */
+@media (max-width: 720px) {
+  body {
+    overflow-x: hidden;
+  }
+
+  .main {
+    width: 100%;
+    max-width: 100%;
+    padding: 1rem;
+  }
+
+  .tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: .6rem;
+    padding-bottom: .35rem;
+  }
+
+  .tab {
+    flex: 0 0 auto;
+    min-height: 42px;
+    padding: 0 .9rem;
+    font-size: .72rem;
+  }
+
+  .ri-invoice-actions {
+    padding: 1rem;
+    border-radius: 22px;
+  }
+
+  .ri-invoice-actions h2 {
+    font-size: 1.8rem;
+    line-height: 1;
+  }
+
+  .ri-invoice-actions .muted {
+    font-size: .95rem;
+    line-height: 1.55;
+  }
+
+  .ri-invoice-action-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .7rem;
+    width: 100%;
+  }
+
+  .ri-invoice-action-buttons .btn {
+    width: 100%;
+    min-height: 50px;
+    padding: 0 .8rem;
+  }
+
+  .ri-form-card {
+    padding: 1rem;
+    border-radius: 22px;
+  }
+
+  .ri-form-grid {
+    grid-template-columns: 1fr !important;
+    gap: .8rem;
+  }
+
+  .ri-form-grid .wide {
+    grid-column: auto !important;
+  }
+
+  .input,
+  select,
+  textarea {
+    font-size: 16px;
+    min-height: 48px;
+  }
+
+  .ri-service-row {
+    grid-template-columns: 1fr !important;
+    gap: .55rem;
+    padding: .8rem;
+    border: 1px solid rgba(43,163,184,.18);
+    border-radius: 16px;
+    background: rgba(255,255,255,.035);
+  }
+
+  .ri-service-row strong {
+    text-align: left;
+    font-size: 1rem;
+  }
+
+  .ri-service-row .btn {
+    width: 100%;
+  }
+}
+
+/* Force print/PDF to use desktop invoice layout even from phone */
+@media print {
+  @page {
+    size: letter portrait;
+    margin: .35in;
+  }
+
+  html,
+  body {
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .no-print,
+  .no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  .print-area,
+  .print-area * {
+    visibility: visible !important;
+  }
+
+  .print-area {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    border: 0 !important;
+  }
+
+  .ri-invoice-preview {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #111827 !important;
+  }
+
+  .ri-paper-header {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: flex-start !important;
+    gap: 18px !important;
+    margin-bottom: 14px !important;
+    padding-bottom: 10px !important;
+    border-bottom: 3px solid #111827 !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .ri-paper-brand {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 12px !important;
+  }
+
+  .ri-paper-brand img {
+    width: 95px !important;
+    max-height: 70px !important;
+  }
+
+  .ri-paper-brand h1 {
+    font-size: 20px !important;
+  }
+
+  .ri-paper-meta {
+    text-align: right !important;
+  }
+
+  .ri-paper-meta h2 {
+    font-size: 34px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .ri-paper-meta p,
+  .ri-paper-info-grid p {
+    font-size: 10px !important;
+    line-height: 1.22 !important;
+  }
+
+  .ri-paper-info-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 10px !important;
+    margin-bottom: 12px !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .ri-paper-info-grid div {
+    min-height: 86px !important;
+    padding: 8px !important;
+    border-radius: 8px !important;
+  }
+
+  .ri-paper-info-grid h3 {
+    font-size: 10px !important;
+    margin-bottom: 4px !important;
+  }
+
+  .ri-invoice-table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+    margin-bottom: 12px !important;
+  }
+
+  .ri-invoice-table th,
+  .ri-invoice-table td {
+    padding: 6px 7px !important;
+    font-size: 9px !important;
+    line-height: 1.22 !important;
+    vertical-align: top !important;
+  }
+
+  .ri-invoice-table tr,
+  .ri-invoice-table td,
+  .ri-invoice-table th {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .ri-paper-bottom {
+    display: grid !important;
+    grid-template-columns: 1.05fr .95fr !important;
+    gap: 12px !important;
+    align-items: start !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .ri-paper-notes,
+  .ri-paper-totals,
+  .ri-paper-totals div,
+  .ri-balance-row {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .ri-paper-notes {
+    padding: 8px !important;
+    border-radius: 8px !important;
+  }
+
+  .ri-paper-notes h3 {
+    font-size: 10px !important;
+    margin-bottom: 4px !important;
+  }
+
+  .ri-paper-notes p {
+    font-size: 9px !important;
+    line-height: 1.2 !important;
+    margin-bottom: 6px !important;
+    orphans: 3 !important;
+    widows: 3 !important;
+  }
+
+  .ri-paper-totals {
+    border-radius: 8px !important;
+  }
+
+  .ri-paper-totals div {
+    padding: 5px 8px !important;
+    font-size: 9px !important;
+  }
+
+  .ri-balance-row span,
+  .ri-balance-row strong {
+    font-size: 11px !important;
+  }
+
+  .ri-paper-footer {
+    margin-top: 10px !important;
+    font-size: 9px !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}
