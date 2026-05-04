@@ -1279,11 +1279,15 @@ function updateInvoiceField(field, value){
 }
 
 function updateInvoiceItem(id, field, value){
+  let serviceChanged = false;
+
   invoiceItems = invoiceItems.map(item => {
     if(item.id !== id) return item;
 
     if(field === 'service'){
       const service = INVOICE_SERVICES.find(s => s.name === value);
+      serviceChanged = true;
+
       return {
         ...item,
         service: value,
@@ -1294,15 +1298,11 @@ function updateInvoiceItem(id, field, value){
       };
     }
 
-    if(field === 'billingCycle'){
-      return { ...item, billingCycle: value };
-    }
-
     return { ...item, [field]: value };
   });
 
-  if(invoiceMode === 'preview'){
-  renderInvoiceView();
+  if(serviceChanged || invoiceMode === 'preview'){
+    renderInvoiceView();
   }
 }
 
