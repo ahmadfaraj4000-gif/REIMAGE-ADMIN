@@ -1547,14 +1547,13 @@ function bindInvoiceEvents(){
   if(addBtn) addBtn.addEventListener('click', () => addInvoiceItem('Website Development'));
 
   document.querySelectorAll('[data-invoice-field]').forEach(input => {
-    input.addEventListener('input', () => updateInvoiceField(input.dataset.invoiceField, input.value));
-  });
+  input.addEventListener('change', () => updateInvoiceField(input.dataset.invoiceField, input.value));
+});
 
   document.querySelectorAll('.ri-service-row').forEach(row => {
     const id = row.dataset.itemId;
 
     row.querySelectorAll('[data-item-field]').forEach(input => {
-      input.addEventListener('input', () => updateInvoiceItem(id, input.dataset.itemField, input.value));
       input.addEventListener('change', () => updateInvoiceItem(id, input.dataset.itemField, input.value));
     });
   });
