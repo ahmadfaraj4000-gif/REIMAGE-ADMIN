@@ -1163,3 +1163,84 @@ body.modal-open{
     text-align:left;
   }
 }
+@media (max-width: 600px) {
+  .ri-form-card {
+    padding: 0.9rem;
+    border-radius: 16px;
+  }
+
+  .ri-invoice-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .ri-invoice-action-buttons {
+    justify-content: space-between;
+  }
+
+  .ri-service-row {
+    gap: 0.4rem;
+  }
+
+  .ri-service-row input,
+  .ri-service-row select {
+    font-size: 0.9rem;
+    padding: 0.5rem;
+  }
+}
+/* ===== FORCE INVOICE PDF TO LOOK SAME ON PHONE + DESKTOP ===== */
+@media print {
+  html,
+  body {
+    width: 8.5in !important;
+    min-height: 11in !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .ri-invoice-preview {
+    width: 7.8in !important;
+    max-width: 7.8in !important;
+    min-width: 7.8in !important;
+    margin: 0 auto !important;
+    padding: 0.25in !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  .ri-paper-header,
+  .ri-paper-info-grid,
+  .ri-paper-bottom {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .ri-invoice-table,
+  .ri-invoice-table tbody,
+  .ri-invoice-table tr,
+  .ri-invoice-table td,
+  .ri-invoice-table th {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .ri-paper-notes,
+  .ri-paper-totals,
+  .ri-paper-totals div,
+  .ri-balance-row {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .ri-invoice-table td {
+    vertical-align: top !important;
+  }
+
+  .ri-paper-notes p {
+    orphans: 3 !important;
+    widows: 3 !important;
+  }
+}
