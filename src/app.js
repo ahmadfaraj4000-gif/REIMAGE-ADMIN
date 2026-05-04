@@ -1271,8 +1271,11 @@ function invoiceTotals(){
 }
 
 function updateInvoiceField(field, value){
-  invoiceData = { ...invoiceData, [field]: value };
-  renderInvoiceView();
+  invoiceData[field] = value;
+
+  if(invoiceMode === 'preview'){
+    renderInvoiceView();
+  }
 }
 
 function updateInvoiceItem(id, field, value){
@@ -1298,7 +1301,9 @@ function updateInvoiceItem(id, field, value){
     return { ...item, [field]: value };
   });
 
+  if(invoiceMode === 'preview'){
   renderInvoiceView();
+  }
 }
 
 function addInvoiceItem(serviceName = 'Website Development'){
