@@ -1282,3 +1282,115 @@ body.modal-open{
     page-break-inside: avoid !important;
   }
 }
+/* ===== MOBILE INVOICE UI CLEANUP ===== */
+@media (max-width: 720px) {
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .main,
+  .ri-invoice-module,
+  .ri-invoice-view,
+  .ri-invoice-form,
+  .ri-invoice-preview,
+  .ri-form-card {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  /* make buttons look the same in edit + preview */
+  .ri-invoice-actions {
+    align-items: stretch !important;
+  }
+
+  .ri-invoice-action-buttons {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: flex-start !important;
+    gap: 0.7rem !important;
+    width: 100% !important;
+  }
+
+  .ri-invoice-action-buttons .btn {
+    width: auto !important;
+    min-width: 108px !important;
+    flex: 0 0 auto !important;
+    min-height: 50px !important;
+    padding: 0 1rem !important;
+  }
+
+  .ri-invoice-action-buttons .btn:nth-child(4) {
+    min-width: 170px !important;
+  }
+
+  /* stop inputs from overflowing/cluttering */
+  .ri-form-card {
+    padding: 1rem !important;
+    border-radius: 22px !important;
+  }
+
+  .ri-form-grid,
+  .ri-service-row {
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .ri-form-grid > *,
+  .ri-service-row > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .input,
+  select,
+  textarea,
+  .ri-service-row input,
+  .ri-service-row select,
+  .ri-service-row textarea {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    min-height: 50px !important;
+    font-size: 16px !important;
+    line-height: 1.35 !important;
+    padding: 0.85rem 1rem !important;
+  }
+
+  textarea {
+    min-height: 120px !important;
+  }
+
+  .ri-service-row strong {
+    text-align: right !important;
+    width: 100% !important;
+    font-size: 1rem !important;
+  }
+
+  /* fix preview card breaking right corner */
+  .ri-invoice-preview {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 auto !important;
+    padding: 1.25rem !important;
+    border-radius: 26px !important;
+    overflow: hidden !important;
+  }
+
+  .ri-paper-header,
+  .ri-paper-brand,
+  .ri-paper-info-grid,
+  .ri-paper-bottom {
+    max-width: 100% !important;
+  }
+
+  .ri-invoice-table {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+  }
+}
