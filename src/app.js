@@ -16,11 +16,16 @@ let filters = { search: '', service: 'all', status: 'all' };
 let calViewDate = new Date();
 let selectedCalDate = new Date().toISOString().slice(0,10);
 
+let invoiceMode = 'edit';
+let invoiceData = null;
+let invoiceItems = [];
+
+
 const STATUS_OPTIONS = ['new', 'contacted', 'closed', 'spam'];
 
-init();
-
 async function init(){
+  invoiceData = createBlankInvoice();
+  invoiceItems = [createInvoiceItem('Website Design / Development')];
   if(!SUPABASE_URL || !SUPABASE_ANON_KEY){
     app.innerHTML = `
       <div class="login-wrap">
@@ -61,7 +66,7 @@ function renderLogin(){
 
         <div class="form-group">
           <label>Email</label>
-          <input class="input" id="email" type="email" required placeholder="reimagebs@gmail.com">
+          <input class="input" id="email" type="email" required placeholder="reimagbs@gmail.com">
         </div>
 
         <div class="form-group">
@@ -118,14 +123,17 @@ async function renderAdmin(){
           <button class="tab ${activeView === 'list' ? 'active' : ''}" data-view="list">List View</button>
           <button class="tab ${activeView === 'calendar' ? 'active' : ''}" data-view="calendar">Calendar View</button>
           <button class="tab ${activeView === 'messages' ? 'active' : ''}" data-view="messages">Messages</button>
+          <button class="tab ${activeView === 'invoice' ? 'active' : ''}" data-view="invoice">Invoices</button>
         </div>
 
-        <div class="toolbar">
-          <input class="input" id="searchInput" placeholder="Search name, email, business, message..." value="${escapeAttr(filters.search)}">
-          <select id="serviceFilter"></select>
-          <select id="statusFilter"></select>
-          <button class="btn btn-primary" id="applyFiltersBtn">Apply</button>
-        </div>
+        ${activeView === 'invoice' ? '' : `
+          <div class="toolbar">
+            <input class="input" id="searchInput" placeholder="Search name, email, business, message..." value="${escapeAttr(filters.search)}">
+            <select id="serviceFilter"></select>
+            <select id="statusFilter"></select>
+            <button class="btn btn-primary" id="applyFiltersBtn">Apply</button>
+          </div>
+        `}
 
         <div id="contentArea"></div>
       </main>
@@ -146,12 +154,16 @@ function bindTopEvents(){
     });
   });
 
-  document.getElementById('applyFiltersBtn').addEventListener('click', () => {
-    filters.search = document.getElementById('searchInput').value.trim();
-    filters.service = document.getElementById('serviceFilter').value;
-    filters.status = document.getElementById('statusFilter').value;
-    renderContent();
-  });
+  const applyFiltersBtn = document.getElementById('applyFiltersBtn');
+
+  if(applyFiltersBtn){
+    applyFiltersBtn.addEventListener('click', () => {
+      filters.search = document.getElementById('searchInput').value.trim();
+      filters.service = document.getElementById('serviceFilter').value;
+      filters.status = document.getElementById('statusFilter').value;
+      renderContent();
+    });
+  }
 }
 
 async function loadRequests(){
@@ -248,6 +260,8 @@ function renderContent(){
     renderCalendarView();
   } else if(activeView === 'messages'){
     renderMessagesView();
+  } else if(activeView === 'invoice'){
+    renderInvoiceView();
   } else {
     renderListView();
   }
@@ -1065,6 +1079,491 @@ function handleModalEscape(e){
   }
 }
 
+
+/* =========================
+   INVOICE GENERATOR
+========================= */
+
+const INVOICE_SERVICES = [
+  {
+    name: 'Website Starter',
+    category: 'Website Development',
+    defaultRate: 99,
+    billingCycle: 'one-time',
+    quantityLabel: 'Project',
+    description: 'Starter website setup.'
+  },
+  {
+    name: 'Website Monthly Hosting / Maintenance',
+    category: 'Website Development',
+    defaultRate: 29.99,
+    billingCycle: 'monthly',
+    quantityLabel: 'Month',
+    description: 'Monthly website hosting, maintenance, and basic support.'
+  },
+  {
+    name: 'Website Development Package',
+    category: 'Website Development',
+    defaultRate: 249.99,
+    billingCycle: 'one-time',
+    quantityLabel: 'Project',
+    description: 'Website development package.'
+  },
+  {
+    name: 'Website Add-On / Extra Page',
+    category: 'Website Development',
+    defaultRate: 49,
+    billingCycle: 'one-time',
+    quantityLabel: 'Item',
+    description: 'Website add-on, extra page, or small upgrade.'
+  },
+  {
+    name: 'Professional Reel',
+    category: 'Social Media Management',
+    defaultRate: 149,
+    billingCycle: 'one-time',
+    quantityLabel: 'Reel',
+    description: 'Professionally shot reel with researched hook, caption, and call to action.'
+  },
+  {
+    name: '3-Reel Content Package',
+    category: 'Social Media Management',
+    defaultRate: 399,
+    billingCycle: 'one-time',
+    quantityLabel: 'Package',
+    description: 'Three professional reels for social media content.'
+  },
+  {
+    name: 'Account Management Support',
+    category: 'Social Media Management',
+    defaultRate: 99,
+    billingCycle: 'weekly',
+    quantityLabel: 'Week',
+    description: 'Weekly social media account management support using owner-provided content.'
+  },
+  {
+    name: 'AI Receptionist Phone',
+    category: 'AI Receptionists',
+    defaultRate: 99,
+    billingCycle: 'monthly',
+    quantityLabel: 'Month',
+    description: 'AI phone receptionist for common questions, lead collection, and customer routing.'
+  },
+  {
+    name: 'AI Web Receptionist Chatbot',
+    category: 'AI Receptionists',
+    defaultRate: 69.99,
+    billingCycle: 'monthly',
+    quantityLabel: 'Month',
+    description: 'Website chatbot receptionist for FAQs, intake, service guidance, and lead capture.'
+  },
+  {
+    name: 'AI Automation',
+    category: 'AI Automation',
+    defaultRate: 249,
+    billingCycle: 'weekly',
+    quantityLabel: 'Week',
+    description: 'Custom automation setup and ongoing optimization tailored to the business.'
+  },
+  {
+    name: 'Growth Foundation',
+    category: 'Package',
+    defaultRate: 399,
+    billingCycle: 'weekly',
+    quantityLabel: 'Week',
+    description: 'Growth foundation package for small businesses building a stronger online presence.'
+  },
+  {
+    name: 'Full Scale System',
+    category: 'Package',
+    defaultRate: 699,
+    billingCycle: 'weekly',
+    quantityLabel: 'Week',
+    description: 'Full scale system package for website, intake, operations, automation, and support.'
+  },
+  {
+    name: 'Consultation',
+    category: 'Strategy',
+    defaultRate: 0,
+    billingCycle: 'one-time',
+    quantityLabel: 'Session',
+    description: 'Consultation or custom quote.'
+  },
+  {
+    name: 'Custom Service',
+    category: 'Custom',
+    defaultRate: 0,
+    billingCycle: 'custom',
+    quantityLabel: 'Qty',
+    description: 'Custom marketing, website, branding, or automation service.'
+  }
+];
+
+
+
+
+const BILLING_OPTIONS = ['one-time', 'weekly', 'monthly', 'hourly', 'custom'];
+
+function billingLabel(value){
+  const labels = {
+    'one-time': 'One-time',
+    weekly: 'Per week',
+    monthly: 'Per month',
+    hourly: 'Per hour',
+    custom: 'Custom'
+  };
+  return labels[value] || titleCase(value || 'custom');
+}
+
+function createBlankInvoice(){
+  return {
+    invoiceNumber: `RI-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}`,
+    invoiceDate: new Date().toISOString().slice(0,10),
+    dueDate: new Date().toISOString().slice(0,10),
+    clientName: '',
+    clientBusiness: '',
+    clientEmail: '',
+    clientPhone: '',
+    clientAddress: '',
+    taxRate: '6.35',
+    discount: '',
+    amountPaid: '',
+    notes: 'Thank you for choosing RE IMAGE Business Solutions. Payment is due according to the agreed project terms.',
+    terms: 'Services are billed according to the scope listed above. Monthly services are billed per month, weekly services are billed per week, and one-time services are billed per project unless otherwise stated. Additional revisions, rush work, add-ons, ad spend, software subscriptions, or third-party costs may be billed separately unless included in writing.'
+  };
+}
+
+function createInvoiceItem(serviceName = 'Website Development'){
+  const service = INVOICE_SERVICES.find(s => s.name === serviceName) || INVOICE_SERVICES[0];
+
+  return {
+    id: crypto.randomUUID(),
+    service: service.name,
+    description: service.description,
+    quantity: 1,
+    rate: String(service.defaultRate),
+    billingCycle: service.billingCycle,
+    quantityLabel: service.quantityLabel
+  };
+}
+
+function invoiceMoney(value){
+  const number = Number(value || 0);
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD'
+  }).format(Number.isFinite(number) ? number : 0);
+}
+
+function invoiceTotals(){
+  const subtotal = invoiceItems.reduce((sum, item) => {
+    return sum + Number(item.quantity || 0) * Number(item.rate || 0);
+  }, 0);
+
+  const discount = Number(invoiceData.discount || 0);
+  const taxableAmount = Math.max(0, subtotal - discount);
+  const tax = taxableAmount * (Number(invoiceData.taxRate || 0) / 100);
+  const total = taxableAmount + tax;
+  const amountPaid = Number(invoiceData.amountPaid || 0);
+  const balanceDue = Math.max(0, total - amountPaid);
+
+  return { subtotal, discount, tax, total, amountPaid, balanceDue };
+}
+
+function updateInvoiceField(field, value){
+  invoiceData = { ...invoiceData, [field]: value };
+  renderInvoiceView();
+}
+
+function updateInvoiceItem(id, field, value){
+  invoiceItems = invoiceItems.map(item => {
+    if(item.id !== id) return item;
+
+    if(field === 'service'){
+      const service = INVOICE_SERVICES.find(s => s.name === value);
+      return {
+        ...item,
+        service: value,
+        description: service ? service.description : item.description,
+        rate: service ? String(service.defaultRate) : item.rate,
+        billingCycle: service ? service.billingCycle : item.billingCycle,
+        quantityLabel: service ? service.quantityLabel : item.quantityLabel
+      };
+    }
+
+    if(field === 'billingCycle'){
+      return { ...item, billingCycle: value };
+    }
+
+    return { ...item, [field]: value };
+  });
+
+  renderInvoiceView();
+}
+
+function addInvoiceItem(serviceName = 'Website Development'){
+  invoiceItems = [...invoiceItems, createInvoiceItem(serviceName)];
+  renderInvoiceView();
+}
+
+function removeInvoiceItem(id){
+  invoiceItems = invoiceItems.filter(item => item.id !== id);
+
+  if(invoiceItems.length === 0){
+    invoiceItems = [createInvoiceItem('Website Development')];
+  }
+
+  renderInvoiceView();
+}
+
+function clearReimageInvoice(){
+  invoiceData = createBlankInvoice();
+  invoiceItems = [createInvoiceItem('Website Development')];
+  invoiceMode = 'edit';
+  renderInvoiceView();
+}
+
+function printReimageInvoice(){
+  invoiceMode = 'preview';
+  renderInvoiceView();
+  setTimeout(() => window.print(), 80);
+}
+
+function renderInvoiceView(){
+  const area = document.getElementById('contentArea');
+  const totals = invoiceTotals();
+
+  area.innerHTML = `
+    <section class="ri-invoice-module">
+      <div class="ri-invoice-actions no-print">
+        <div>
+          <div class="kicker">Invoices</div>
+          <h2>Marketing Invoice Generator</h2>
+          <p class="muted">Choose services from pricing presets, confirm weekly/monthly/one-time billing, preview, then print or save as PDF.</p>
+        </div>
+
+        <div class="ri-invoice-action-buttons">
+          <button class="btn ${invoiceMode === 'edit' ? 'btn-primary' : 'btn-secondary'}" id="invoiceEditBtn">Edit</button>
+          <button class="btn ${invoiceMode === 'preview' ? 'btn-primary' : 'btn-secondary'}" id="invoicePreviewBtn">Preview</button>
+          <button class="btn btn-light" id="invoiceClearBtn">Clear</button>
+          <button class="btn btn-primary" id="invoicePrintBtn">Print / Save PDF</button>
+        </div>
+      </div>
+
+      <div class="ri-invoice-view ${invoiceMode === 'edit' ? 'show-edit' : 'show-preview'}">
+        <div class="ri-invoice-form no-print">
+          ${invoiceFormHtml()}
+        </div>
+
+        ${invoicePreviewHtml(totals)}
+      </div>
+    </section>`;
+
+  bindInvoiceEvents();
+}
+
+function invoiceFormHtml(){
+  return `
+    <div class="ri-form-card">
+      <h3>Invoice Details</h3>
+      <div class="ri-form-grid">
+        <label>Invoice #<input class="input" value="${escapeAttr(invoiceData.invoiceNumber)}" data-invoice-field="invoiceNumber"></label>
+        <label>Invoice Date<input class="input" type="date" value="${escapeAttr(invoiceData.invoiceDate)}" data-invoice-field="invoiceDate"></label>
+        <label>Due Date<input class="input" type="date" value="${escapeAttr(invoiceData.dueDate)}" data-invoice-field="dueDate"></label>
+        <label>CT Tax %<input class="input" type="number" step="0.01" value="${escapeAttr(invoiceData.taxRate)}" data-invoice-field="taxRate"></label>
+      </div>
+    </div>
+
+    <div class="ri-form-card">
+      <h3>Client</h3>
+      <div class="ri-form-grid">
+        <label>Client Name<input class="input" value="${escapeAttr(invoiceData.clientName)}" data-invoice-field="clientName"></label>
+        <label>Business Name<input class="input" value="${escapeAttr(invoiceData.clientBusiness)}" data-invoice-field="clientBusiness"></label>
+        <label>Email<input class="input" value="${escapeAttr(invoiceData.clientEmail)}" data-invoice-field="clientEmail"></label>
+        <label>Phone<input class="input" value="${escapeAttr(invoiceData.clientPhone)}" data-invoice-field="clientPhone"></label>
+        <label class="wide">Address<input class="input" value="${escapeAttr(invoiceData.clientAddress)}" data-invoice-field="clientAddress"></label>
+      </div>
+    </div>
+
+    <div class="ri-form-card">
+      <div class="ri-section-row">
+        <div>
+          <h3>Services</h3>
+          <p class="muted">Presets fill the rate and billing type automatically. You can still edit price, quantity, and billing cycle.</p>
+        </div>
+        <button class="btn btn-secondary" id="addInvoiceServiceBtn">+ Add Service</button>
+      </div>
+
+      <div class="ri-service-editor">
+        ${invoiceItems.map(item => invoiceItemEditorHtml(item)).join('')}
+      </div>
+    </div>
+
+    <div class="ri-form-card">
+      <h3>Adjustments</h3>
+      <div class="ri-form-grid">
+        <label>Discount<input class="input" type="number" step="0.01" value="${escapeAttr(invoiceData.discount)}" data-invoice-field="discount"></label>
+        <label>Amount Paid<input class="input" type="number" step="0.01" value="${escapeAttr(invoiceData.amountPaid)}" data-invoice-field="amountPaid"></label>
+      </div>
+    </div>
+
+    <div class="ri-form-card">
+      <h3>Notes / Terms</h3>
+      <label>Notes<textarea data-invoice-field="notes">${escapeHtml(invoiceData.notes)}</textarea></label>
+      <label>Terms<textarea data-invoice-field="terms">${escapeHtml(invoiceData.terms)}</textarea></label>
+    </div>`;
+}
+
+function invoiceItemEditorHtml(item){
+  return `
+    <div class="ri-service-row" data-item-id="${escapeAttr(item.id)}">
+      <select data-item-field="service" title="Service preset">
+        ${INVOICE_SERVICES.map(service => `
+          <option value="${escapeAttr(service.name)}" ${item.service === service.name ? 'selected' : ''}>${escapeHtml(service.name)} — ${billingLabel(service.billingCycle)}</option>
+        `).join('')}
+      </select>
+
+      <select data-item-field="billingCycle" title="Billing cycle">
+        ${BILLING_OPTIONS.map(option => `
+          <option value="${escapeAttr(option)}" ${item.billingCycle === option ? 'selected' : ''}>${billingLabel(option)}</option>
+        `).join('')}
+      </select>
+
+      <input class="input" placeholder="Service description" value="${escapeAttr(item.description)}" data-item-field="description">
+      <input class="input" type="number" min="0" step="0.01" value="${escapeAttr(item.quantity)}" data-item-field="quantity" title="Quantity / months / weeks / hours">
+      <input class="input" type="number" min="0" step="0.01" value="${escapeAttr(item.rate)}" data-item-field="rate" title="Rate">
+      <strong>${invoiceMoney(Number(item.quantity || 0) * Number(item.rate || 0))}</strong>
+      <button class="btn btn-danger" data-remove-item="${escapeAttr(item.id)}">Remove</button>
+    </div>`;
+}
+
+function invoicePreviewHtml(totals){
+  return `
+    <article class="ri-invoice-preview print-area">
+      <header class="ri-paper-header">
+        <div class="ri-paper-brand">
+          <img src="/logo.png" alt="RE IMAGE Business Solutions logo" onerror="this.style.display='none'">
+          <div>
+            <h1>RE IMAGE</h1>
+            <p>Business Solutions</p>
+          </div>
+        </div>
+
+        <div class="ri-paper-meta">
+          <h2>Invoice</h2>
+          <p><strong>Invoice #:</strong> ${escapeHtml(invoiceData.invoiceNumber || '—')}</p>
+          <p><strong>Date:</strong> ${formatDateOnly(invoiceData.invoiceDate)}</p>
+          <p><strong>Due:</strong> ${formatDateOnly(invoiceData.dueDate)}</p>
+        </div>
+      </header>
+
+      <section class="ri-paper-info-grid">
+        <div>
+          <h3>Bill To</h3>
+          <p><strong>${escapeHtml(invoiceData.clientName || 'Client Name')}</strong></p>
+          <p>${escapeHtml(invoiceData.clientBusiness || 'Business Name')}</p>
+          <p>${escapeHtml(invoiceData.clientEmail || 'Client email')}</p>
+          <p>${escapeHtml(invoiceData.clientPhone || 'Client phone')}</p>
+          <p>${escapeHtml(invoiceData.clientAddress || 'Client address')}</p>
+        </div>
+
+        <div>
+          <h3>From</h3>
+          <p><strong>RE IMAGE Business Solutions</strong></p>
+          <p>Marketing • Websites • Branding • Automation</p>
+          <p>Connecticut, USA</p>
+          <p>+1 (860) 718-5928</p>
+          <p>reimagbs@gmail.com</p>
+        </div>
+
+        <div>
+          <h3>Project Summary</h3>
+          <p>${invoiceItems.length} service${invoiceItems.length === 1 ? '' : 's'} selected</p>
+          <p>Tax: CT ${escapeHtml(invoiceData.taxRate || '0')}%</p>
+          <p>Payment terms: Due by invoice date unless otherwise agreed.</p>
+        </div>
+      </section>
+
+      <table class="ri-invoice-table">
+        <thead>
+          <tr>
+            <th>Service</th>
+            <th>Billing</th>
+            <th>Description</th>
+            <th>Qty</th>
+            <th>Rate</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${invoiceItems.map(item => `
+            <tr>
+              <td>${escapeHtml(item.service)}</td>
+              <td>${escapeHtml(billingLabel(item.billingCycle))}</td>
+              <td>${escapeHtml(item.description || '—')}</td>
+              <td>${escapeHtml(item.quantity || '0')}</td>
+              <td>${invoiceMoney(item.rate)}</td>
+              <td>${invoiceMoney(Number(item.quantity || 0) * Number(item.rate || 0))}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+
+      <section class="ri-paper-bottom">
+        <div class="ri-paper-notes">
+          <h3>Notes</h3>
+          <p>${escapeHtml(invoiceData.notes)}</p>
+          <h3>Terms</h3>
+          <p>${escapeHtml(invoiceData.terms)}</p>
+        </div>
+
+        <div class="ri-paper-totals">
+          <div><span>Subtotal</span><strong>${invoiceMoney(totals.subtotal)}</strong></div>
+          <div><span>Discount</span><strong>-${invoiceMoney(totals.discount)}</strong></div>
+          <div><span>CT Tax (${escapeHtml(invoiceData.taxRate || '0')}%)</span><strong>${invoiceMoney(totals.tax)}</strong></div>
+          <div><span>Total</span><strong>${invoiceMoney(totals.total)}</strong></div>
+          <div><span>Paid</span><strong>${invoiceMoney(totals.amountPaid)}</strong></div>
+          <div class="ri-balance-row"><span>Balance Due</span><strong>${invoiceMoney(totals.balanceDue)}</strong></div>
+        </div>
+      </section>
+
+      <footer class="ri-paper-footer">
+        <p>Thank you for trusting RE IMAGE Business Solutions.</p>
+      </footer>
+    </article>`;
+}
+
+function bindInvoiceEvents(){
+  const editBtn = document.getElementById('invoiceEditBtn');
+  const previewBtn = document.getElementById('invoicePreviewBtn');
+  const clearBtn = document.getElementById('invoiceClearBtn');
+  const printBtn = document.getElementById('invoicePrintBtn');
+  const addBtn = document.getElementById('addInvoiceServiceBtn');
+
+  if(editBtn) editBtn.addEventListener('click', () => { invoiceMode = 'edit'; renderInvoiceView(); });
+  if(previewBtn) previewBtn.addEventListener('click', () => { invoiceMode = 'preview'; renderInvoiceView(); });
+  if(clearBtn) clearBtn.addEventListener('click', clearReimageInvoice);
+  if(printBtn) printBtn.addEventListener('click', printReimageInvoice);
+  if(addBtn) addBtn.addEventListener('click', () => addInvoiceItem('Website Development'));
+
+  document.querySelectorAll('[data-invoice-field]').forEach(input => {
+    input.addEventListener('input', () => updateInvoiceField(input.dataset.invoiceField, input.value));
+  });
+
+  document.querySelectorAll('.ri-service-row').forEach(row => {
+    const id = row.dataset.itemId;
+
+    row.querySelectorAll('[data-item-field]').forEach(input => {
+      input.addEventListener('input', () => updateInvoiceItem(id, input.dataset.itemField, input.value));
+      input.addEventListener('change', () => updateInvoiceItem(id, input.dataset.itemField, input.value));
+    });
+  });
+
+  document.querySelectorAll('[data-remove-item]').forEach(btn => {
+    btn.addEventListener('click', () => removeInvoiceItem(btn.dataset.removeItem));
+  });
+}
+
 /* =========================
    HELPERS
 ========================= */
@@ -1157,3 +1656,5 @@ function escapeHtml(v){
 function escapeAttr(v){
   return escapeHtml(v).replace(/"/g,'&quot;');
 }
+
+init();
