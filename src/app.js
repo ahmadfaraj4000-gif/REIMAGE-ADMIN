@@ -1150,12 +1150,28 @@ const INVOICE_SERVICES = [
     description: 'AI phone receptionist for common questions, lead collection, and customer routing.'
   },
   {
-    name: 'AI Web Receptionist Chatbot',
+    name: 'AI Web Receptionist Starter',
     category: 'AI Receptionists',
-    defaultRate: 69.99,
+    defaultRate: 99,
     billingCycle: 'monthly',
     quantityLabel: 'Month',
-    description: 'Website chatbot receptionist for FAQs, intake, service guidance, and lead capture.'
+    description: 'Starter web receptionist plan with 2,000 AI replies/month, 20 replies per conversation, 1 business profile, 1 website, and lead capture.'
+  },
+  {
+    name: 'AI Web Receptionist Growth',
+    category: 'AI Receptionists',
+    defaultRate: 149,
+    billingCycle: 'monthly',
+    quantityLabel: 'Month',
+    description: 'Growth web receptionist plan with up to 5,000 AI replies/month for higher website traffic and more customer questions.'
+  },
+  {
+    name: 'AI Receptionist + Automations Pro',
+    category: 'AI Receptionists',
+    defaultRate: 249,
+    billingCycle: 'monthly',
+    quantityLabel: 'Month',
+    description: 'Pro AI receptionist plan with up to 10,000 AI replies/month plus automation support for intake, follow-up, routing, and lead handling.'
   },
   {
     name: 'AI Automation',
