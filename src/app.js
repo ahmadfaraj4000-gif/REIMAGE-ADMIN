@@ -20,12 +20,13 @@ let invoiceMode = 'edit';
 let invoiceData = null;
 let invoiceItems = [];
 
+const DEFAULT_INVOICE_SERVICE = 'Website Starter';
 
 const STATUS_OPTIONS = ['new', 'contacted', 'closed', 'spam'];
 
 async function init(){
   invoiceData = createBlankInvoice();
-  invoiceItems = [createInvoiceItem('Website Design / Development')];
+  invoiceItems = [createInvoiceItem(DEFAULT_INVOICE_SERVICE)];
   if(!SUPABASE_URL || !SUPABASE_ANON_KEY){
     app.innerHTML = `
       <div class="login-wrap">
@@ -140,12 +141,21 @@ async function renderAdmin(){
     </div>`;
 
   bindTopEvents();
+
+  if(activeView === 'invoice'){
+    renderStats();
+    renderInvoiceView();
+    return;
+  }
+
   await loadRequests();
 }
 
 function bindTopEvents(){
   document.getElementById('signOutBtn').addEventListener('click', () => supabase.auth.signOut());
-  document.getElementById('refreshBtn').addEventListener('click', loadRequests);
+  document.getElementById('refreshBtn').addEventListener('click', () => {
+    activeView === 'invoice' ? renderInvoiceView() : loadRequests();
+  });
 
   document.querySelectorAll('.tab').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1206,7 +1216,7 @@ const INVOICE_SERVICES = [
     description: 'Consultation or custom quote.'
   },
   {
-    name: 'Custom Service',
+    name: 'Custom Work',
     category: 'Custom',
     defaultRate: 0,
     billingCycle: 'custom',
@@ -1249,15 +1259,16 @@ function createBlankInvoice(){
   };
 }
 
-function createInvoiceItem(serviceName = 'Website Development'){
+function createInvoiceItem(serviceName = DEFAULT_INVOICE_SERVICE){
   const service = INVOICE_SERVICES.find(s => s.name === serviceName) || INVOICE_SERVICES[0];
+  const isCustomService = service.category === 'Custom';
 
   return {
     id: crypto.randomUUID(),
     service: service.name,
-    description: service.description,
+    description: isCustomService ? '' : service.description,
     quantity: 1,
-    rate: String(service.defaultRate),
+    rate: isCustomService ? '' : String(service.defaultRate),
     billingCycle: service.billingCycle,
     quantityLabel: service.quantityLabel
   };
@@ -1307,8 +1318,8 @@ function updateInvoiceItem(id, field, value){
       return {
         ...item,
         service: value,
-        description: service ? service.description : item.description,
-        rate: service ? String(service.defaultRate) : item.rate,
+        description: service && service.category === 'Custom' ? '' : service ? service.description : item.description,
+        rate: service && service.category === 'Custom' ? '' : service ? String(service.defaultRate) : item.rate,
         billingCycle: service ? service.billingCycle : item.billingCycle,
         quantityLabel: service ? service.quantityLabel : item.quantityLabel
       };
@@ -1322,7 +1333,7 @@ function updateInvoiceItem(id, field, value){
   }
 }
 
-function addInvoiceItem(serviceName = 'Website Development'){
+function addInvoiceItem(serviceName = DEFAULT_INVOICE_SERVICE){
   invoiceItems = [...invoiceItems, createInvoiceItem(serviceName)];
   renderInvoiceView();
 }
@@ -1331,15 +1342,17 @@ function removeInvoiceItem(id){
   invoiceItems = invoiceItems.filter(item => item.id !== id);
 
   if(invoiceItems.length === 0){
-    invoiceItems = [createInvoiceItem('Website Development')];
+    invoiceItems = [createInvoiceItem(DEFAULT_INVOICE_SERVICE)];
   }
 
   renderInvoiceView();
 }
 
 function clearReimageInvoice(){
+  if(!confirm('Clear this invoice draft?')) return;
+
   invoiceData = createBlankInvoice();
-  invoiceItems = [createInvoiceItem('Website Development')];
+  invoiceItems = [createInvoiceItem(DEFAULT_INVOICE_SERVICE)];
   invoiceMode = 'edit';
   renderInvoiceView();
 }
@@ -1436,8 +1449,10 @@ function invoiceFormHtml(){
 }
 
 function invoiceItemEditorHtml(item){
+  const customService = isCustomInvoiceService(item);
+
   return `
-    <div class="ri-service-row" data-item-id="${escapeAttr(item.id)}">
+    <div class="ri-service-row ${customService ? 'is-custom' : ''}" data-item-id="${escapeAttr(item.id)}">
       <select data-item-field="service" title="Service preset">
         ${INVOICE_SERVICES.map(service => `
           <option value="${escapeAttr(service.name)}" ${item.service === service.name ? 'selected' : ''}>${escapeHtml(service.name)} — ${billingLabel(service.billingCycle)}</option>
@@ -1450,12 +1465,17 @@ function invoiceItemEditorHtml(item){
         `).join('')}
       </select>
 
-      <input class="input" placeholder="Service description" value="${escapeAttr(item.description)}" data-item-field="description">
-      <input class="input" type="number" min="0" step="0.01" value="${escapeAttr(item.quantity)}" data-item-field="quantity" title="Quantity / months / weeks / hours">
-      <input class="input" type="number" min="0" step="0.01" value="${escapeAttr(item.rate)}" data-item-field="rate" title="Rate">
-      <strong>${invoiceMoney(Number(item.quantity || 0) * Number(item.rate || 0))}</strong>
+      <input class="input" placeholder="${customService ? 'Describe the custom work' : 'Service description'}" value="${escapeAttr(item.description)}" data-item-field="description">
+      <input class="input" type="number" min="0" step="0.01" value="${escapeAttr(item.quantity)}" data-item-field="quantity" title="${escapeAttr(item.quantityLabel || 'Quantity')}">
+      <input class="input" type="number" min="0" step="0.01" placeholder="${customService ? 'Price' : 'Rate'}" value="${escapeAttr(item.rate)}" data-item-field="rate" title="${customService ? 'Custom price' : 'Rate'}">
+      <strong data-item-total="${escapeAttr(item.id)}">${invoiceMoney(Number(item.quantity || 0) * Number(item.rate || 0))}</strong>
       <button class="btn btn-danger" data-remove-item="${escapeAttr(item.id)}">Remove</button>
     </div>`;
+}
+
+function isCustomInvoiceService(item){
+  const service = INVOICE_SERVICES.find(option => option.name === item.service);
+  return service && service.category === 'Custom';
 }
 
 function invoicePreviewHtml(totals){
@@ -1565,16 +1585,21 @@ function bindInvoiceEvents(){
   if(previewBtn) previewBtn.addEventListener('click', () => { invoiceMode = 'preview'; renderInvoiceView(); });
   if(clearBtn) clearBtn.addEventListener('click', clearReimageInvoice);
   if(printBtn) printBtn.addEventListener('click', printReimageInvoice);
-  if(addBtn) addBtn.addEventListener('click', () => addInvoiceItem('Website Development'));
+  if(addBtn) addBtn.addEventListener('click', () => addInvoiceItem());
 
   document.querySelectorAll('[data-invoice-field]').forEach(input => {
-  input.addEventListener('change', () => updateInvoiceField(input.dataset.invoiceField, input.value));
-});
+    input.addEventListener('input', () => updateInvoiceField(input.dataset.invoiceField, input.value));
+    input.addEventListener('change', () => updateInvoiceField(input.dataset.invoiceField, input.value));
+  });
 
   document.querySelectorAll('.ri-service-row').forEach(row => {
     const id = row.dataset.itemId;
 
     row.querySelectorAll('[data-item-field]').forEach(input => {
+      input.addEventListener('input', () => {
+        updateInvoiceItem(id, input.dataset.itemField, input.value);
+        updateInvoiceItemTotal(row, id);
+      });
       input.addEventListener('change', () => updateInvoiceItem(id, input.dataset.itemField, input.value));
     });
   });
@@ -1582,6 +1607,15 @@ function bindInvoiceEvents(){
   document.querySelectorAll('[data-remove-item]').forEach(btn => {
     btn.addEventListener('click', () => removeInvoiceItem(btn.dataset.removeItem));
   });
+}
+
+function updateInvoiceItemTotal(row, id){
+  const total = row.querySelector(`[data-item-total="${id}"]`);
+  const item = invoiceItems.find(invoiceItem => invoiceItem.id === id);
+
+  if(total && item){
+    total.textContent = invoiceMoney(Number(item.quantity || 0) * Number(item.rate || 0));
+  }
 }
 
 /* =========================
