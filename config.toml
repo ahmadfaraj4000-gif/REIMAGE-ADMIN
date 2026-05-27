@@ -1,5 +1,0 @@
-[functions.send-start-request-email]
-verify_jwt = false
-
-[functions.qr-redirect]
-verify_jwt = false
