@@ -1124,11 +1124,7 @@ function handleModalEscape(e){
 async function renderQrView(){
   await loadDynamicQrCodes();
 
-  const selectedDynamic = selectedDynamicQr() || dynamicQrCodes[0] || null;
-
-  if(selectedDynamic && selectedDynamic.id !== selectedDynamicQrId){
-    selectedDynamicQrId = selectedDynamic.id;
-  }
+  const selectedDynamic = selectedDynamicQr();
 
   document.getElementById('contentArea').innerHTML = `
     <section class="qr-module">
@@ -1184,7 +1180,14 @@ async function renderQrView(){
     </section>`;
 
   bindQrEvents();
-  generateQrCode(true);
+
+  if((qrMode === 'static' && qrData.url) || (qrMode === 'dynamic' && selectedDynamic)){
+    generateQrCode(true);
+  } else {
+    clearQrCanvas();
+    const label = document.getElementById('qrCurrentUrl');
+    if(label) label.textContent = '';
+  }
 }
 
 function staticQrHtml(){
@@ -1195,6 +1198,7 @@ function staticQrHtml(){
           <div class="kicker">Static QR</div>
           <h3>Direct Link Code</h3>
         </div>
+        <button class="btn btn-secondary" type="button" id="newStaticQrBtn">New</button>
       </div>
 
       <div class="qr-form-grid">
@@ -1218,7 +1222,7 @@ function dynamicQrHtml(selected){
             <div class="kicker">Dynamic QR</div>
             <h3>${selected ? 'Edit Redirect' : 'Create Redirect'}</h3>
           </div>
-          ${selected ? `<button class="btn btn-secondary" type="button" id="newDynamicQrBtn">New</button>` : ''}
+          <button class="btn btn-secondary" type="button" id="newDynamicQrBtn">New</button>
         </div>
 
         <div class="qr-form-grid">
@@ -1234,7 +1238,7 @@ function dynamicQrHtml(selected){
 
           <div class="wide">
             <label for="dynamicQrDestination">Editable Destination URL</label>
-            <input class="input" id="dynamicQrDestination" type="url" required value="${escapeAttr(selected?.destination_url || 'https://reimage.business/start-with-us.html')}" placeholder="https://yourwebsite.com/current-offer">
+            <input class="input" id="dynamicQrDestination" type="url" required value="${escapeAttr(selected?.destination_url || '')}" placeholder="https://yourwebsite.com/current-offer">
           </div>
 
           <div>
@@ -1344,6 +1348,11 @@ function bindQrEvents(){
     });
   }
 
+  const newStaticQrBtn = document.getElementById('newStaticQrBtn');
+  if(newStaticQrBtn){
+    newStaticQrBtn.addEventListener('click', clearStaticQrForm);
+  }
+
   const dynamicForm = document.getElementById('qrDynamicForm');
   if(dynamicForm){
     dynamicForm.addEventListener('submit', saveDynamicQr);
@@ -1351,10 +1360,7 @@ function bindQrEvents(){
 
   const newDynamicQrBtn = document.getElementById('newDynamicQrBtn');
   if(newDynamicQrBtn){
-    newDynamicQrBtn.addEventListener('click', () => {
-      selectedDynamicQrId = null;
-      renderQrView();
-    });
+    newDynamicQrBtn.addEventListener('click', clearDynamicQrForm);
   }
 
   const deleteDynamicQrBtn = document.getElementById('deleteDynamicQrBtn');
@@ -1501,6 +1507,74 @@ async function deleteDynamicQr(){
   await renderQrView();
 }
 
+function clearStaticQrForm(){
+  if(hasStaticQrInput() && !confirmClearQr()) return;
+
+  qrData.url = '';
+  const url = document.getElementById('qrUrl');
+  const label = document.getElementById('qrCurrentUrl');
+
+  if(url) url.value = '';
+  if(label) label.textContent = '';
+
+  clearQrCanvas();
+  hideQrNotice();
+}
+
+function clearDynamicQrForm(){
+  if(hasUnsavedDynamicQrChanges() && !confirmClearQr()) return;
+
+  selectedDynamicQrId = null;
+  qrData.fileName = 'reimage-qr-code';
+  renderQrView();
+}
+
+function hasStaticQrInput(){
+  const url = document.getElementById('qrUrl');
+  return Boolean((url?.value || '').trim());
+}
+
+function hasUnsavedDynamicQrChanges(){
+  const selected = selectedDynamicQr();
+  const title = document.getElementById('dynamicQrTitle')?.value.trim() || '';
+  const slug = slugify(document.getElementById('dynamicQrSlug')?.value || '');
+  const destination = document.getElementById('dynamicQrDestination')?.value.trim() || '';
+  const isActive = document.getElementById('dynamicQrActive')?.value !== 'false';
+
+  if(!selected){
+    return Boolean(title || destination || (slug && slug !== 'qr-code'));
+  }
+
+  return (
+    title !== (selected.title || '') ||
+    slug !== (selected.slug || '') ||
+    destination !== (selected.destination_url || '') ||
+    isActive !== (selected.is_active !== false)
+  );
+}
+
+function confirmClearQr(){
+  return confirm('You have unsaved QR details. Click Cancel to save first, or OK to clear them.');
+}
+
+function clearQrCanvas(){
+  const canvas = document.getElementById('qrCanvas');
+  if(!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+  if(ctx){
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+}
+
+function hideQrNotice(){
+  const notice = document.getElementById('qrNotice');
+  if(!notice) return;
+
+  notice.className = 'notice';
+  notice.textContent = '';
+}
+
 async function generateQrCode(quiet = false){
   const canvas = document.getElementById('qrCanvas');
   const notice = document.getElementById('qrNotice');
@@ -1536,6 +1610,11 @@ async function generateQrCode(quiet = false){
 async function downloadQrPng(){
   updateQrDataFromForm();
 
+  if(qrMode === 'dynamic' && !selectedDynamicQr()){
+    showQrError('Select a saved dynamic QR code before downloading.');
+    return;
+  }
+
   const payload = currentQrPayload();
 
   if(!isValidQrUrl(payload)){
@@ -1553,6 +1632,11 @@ async function downloadQrPng(){
 
 async function downloadQrSvg(){
   updateQrDataFromForm();
+
+  if(qrMode === 'dynamic' && !selectedDynamicQr()){
+    showQrError('Select a saved dynamic QR code before downloading.');
+    return;
+  }
 
   const payload = currentQrPayload();
 
