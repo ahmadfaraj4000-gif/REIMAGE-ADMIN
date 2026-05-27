@@ -718,6 +718,283 @@ body.modal-open{
 }
 
 
+/* ===== QR CODE GENERATOR ===== */
+
+.qr-module{
+  display:grid;
+  gap:1.25rem;
+}
+
+.qr-actions{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  gap:1rem;
+  background:rgba(255,255,255,.045);
+  border:1px solid rgba(43,163,184,.20);
+  border-radius:24px;
+  padding:1.2rem;
+  box-shadow:0 24px 80px rgba(0,0,0,.18);
+}
+
+.qr-actions h2{
+  font-size:2.1rem;
+  line-height:.95;
+}
+
+.qr-action-buttons{
+  display:flex;
+  flex-wrap:wrap;
+  gap:.65rem;
+  justify-content:flex-end;
+}
+
+.qr-type-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:1rem;
+}
+
+.qr-type-card{
+  text-align:left;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.045);
+  color:#fff;
+  border-radius:18px;
+  padding:1rem;
+  min-height:112px;
+  transition:.2s ease;
+}
+
+.qr-type-card:hover,
+.qr-type-card.active{
+  transform:translateY(-1px);
+  border-color:rgba(43,163,184,.45);
+  background:rgba(43,163,184,.13);
+}
+
+.qr-type-card strong{
+  display:block;
+  font-size:1.05rem;
+  margin-bottom:.45rem;
+}
+
+.qr-type-card span{
+  color:var(--light-gray);
+  line-height:1.5;
+}
+
+.qr-workspace{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 460px;
+  gap:1.2rem;
+  align-items:start;
+}
+
+.qr-editor-stack{
+  display:grid;
+  gap:1rem;
+}
+
+.qr-form,
+.qr-preview-card,
+.qr-list-card{
+  background:linear-gradient(145deg,rgba(255,255,255,.06),rgba(26,122,138,.055));
+  border:1px solid rgba(43,163,184,.20);
+  border-radius:24px;
+  padding:1.2rem;
+  box-shadow:0 24px 80px rgba(0,0,0,.18);
+}
+
+.qr-dynamic-layout{
+  display:grid;
+  gap:1rem;
+}
+
+.qr-form-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:1rem;
+  margin-bottom:1rem;
+}
+
+.qr-form-head h3{
+  font-size:1.65rem;
+  line-height:.95;
+}
+
+.qr-form-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:1rem;
+  margin-bottom:1rem;
+}
+
+.qr-form-grid .wide{
+  grid-column:span 4;
+}
+
+.qr-form input[type="color"]{
+  height:52px;
+  padding:.35rem;
+}
+
+.qr-preview-head{
+  display:flex;
+  justify-content:space-between;
+  gap:1rem;
+  margin-bottom:1rem;
+}
+
+.qr-preview-head h3{
+  font-size:1.75rem;
+  line-height:.95;
+}
+
+.qr-mode-pill{
+  border-radius:999px;
+  padding:.35rem .65rem;
+  font-size:.72rem;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  border:1px solid rgba(255,255,255,.12);
+}
+
+.qr-mode-pill.static{
+  color:#8fe8f8;
+  background:rgba(43,163,184,.13);
+}
+
+.qr-mode-pill.dynamic{
+  color:#ffd17c;
+  background:rgba(200,146,42,.13);
+}
+
+.qr-canvas-wrap{
+  background:#fff;
+  border-radius:18px;
+  padding:1.1rem;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  min-height:420px;
+}
+
+.qr-canvas-wrap canvas{
+  width:100%;
+  max-width:420px;
+  height:auto;
+  display:block;
+}
+
+.qr-current-url{
+  margin-top:1rem;
+  word-break:break-word;
+}
+
+.qr-preview-label{
+  margin-top:1rem;
+}
+
+.qr-redirect-box{
+  margin:0 0 1rem;
+  border:1px solid rgba(43,163,184,.24);
+  border-radius:16px;
+  background:rgba(43,163,184,.08);
+  padding:.95rem;
+}
+
+.qr-redirect-box span{
+  display:block;
+  color:var(--gray);
+  font-size:.76rem;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  margin-bottom:.35rem;
+}
+
+.qr-redirect-box strong{
+  display:block;
+  color:#fff;
+  word-break:break-word;
+  line-height:1.45;
+}
+
+.qr-dynamic-list{
+  display:grid;
+  gap:.7rem;
+}
+
+.qr-dynamic-row{
+  width:100%;
+  display:flex;
+  justify-content:space-between;
+  gap:1rem;
+  text-align:left;
+  color:#fff;
+  border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.035);
+  border-radius:16px;
+  padding:.9rem;
+}
+
+.qr-dynamic-row:hover,
+.qr-dynamic-row.active{
+  background:rgba(43,163,184,.13);
+  border-color:rgba(43,163,184,.35);
+}
+
+.qr-dynamic-row span,
+.qr-dynamic-row em{
+  min-width:0;
+}
+
+.qr-dynamic-row strong,
+.qr-dynamic-row em{
+  display:block;
+}
+
+.qr-dynamic-row em{
+  margin-top:.25rem;
+  color:var(--light-gray);
+  font-style:normal;
+  word-break:break-word;
+  line-height:1.35;
+}
+
+.qr-dynamic-row small{
+  flex:0 0 auto;
+  color:var(--gold-light);
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+
+@media(max-width:1100px){
+  .qr-actions{
+    flex-direction:column;
+    align-items:stretch;
+  }
+
+  .qr-action-buttons{
+    justify-content:flex-start;
+  }
+
+  .qr-workspace,
+  .qr-type-grid,
+  .qr-form-grid{
+    grid-template-columns:1fr;
+  }
+
+  .qr-form-grid .wide{
+    grid-column:auto;
+  }
+}
+
+
 /* ===== REIMAGE REAL INVOICE PREVIEW FIX ===== */
 
 .ri-invoice-module{

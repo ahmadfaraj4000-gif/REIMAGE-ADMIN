@@ -1,8 +1,10 @@
 import './styles.css';
 import { createClient } from '@supabase/supabase-js';
+import QRCode from 'qrcode';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const QR_REDIRECT_BASE_URL = (import.meta.env.VITE_QR_REDIRECT_BASE_URL || `${SUPABASE_URL}/functions/v1/qr-redirect`).replace(/\/+$/,'');
 
 const app = document.getElementById('app');
 
@@ -19,6 +21,17 @@ let selectedCalDate = new Date().toISOString().slice(0,10);
 let invoiceMode = 'edit';
 let invoiceData = null;
 let invoiceItems = [];
+let qrMode = 'static';
+let qrData = {
+  url: 'https://reimage.business/start-with-us.html',
+  fileName: 'reimage-qr-code',
+  colorDark: '#0c1f2e',
+  colorLight: '#ffffff',
+  size: 1000,
+  margin: 3
+};
+let dynamicQrCodes = [];
+let selectedDynamicQrId = null;
 
 const DEFAULT_INVOICE_SERVICE = 'Website Starter';
 
@@ -125,9 +138,10 @@ async function renderAdmin(){
           <button class="tab ${activeView === 'calendar' ? 'active' : ''}" data-view="calendar">Calendar View</button>
           <button class="tab ${activeView === 'messages' ? 'active' : ''}" data-view="messages">Messages</button>
           <button class="tab ${activeView === 'invoice' ? 'active' : ''}" data-view="invoice">Invoices</button>
+          <button class="tab ${activeView === 'qr' ? 'active' : ''}" data-view="qr">QR Codes</button>
         </div>
 
-        ${activeView === 'invoice' ? '' : `
+        ${['invoice','qr'].includes(activeView) ? '' : `
           <div class="toolbar">
             <input class="input" id="searchInput" placeholder="Search name, email, business, message..." value="${escapeAttr(filters.search)}">
             <select id="serviceFilter"></select>
@@ -148,13 +162,25 @@ async function renderAdmin(){
     return;
   }
 
+  if(activeView === 'qr'){
+    renderStats();
+    await renderQrView();
+    return;
+  }
+
   await loadRequests();
 }
 
 function bindTopEvents(){
   document.getElementById('signOutBtn').addEventListener('click', () => supabase.auth.signOut());
   document.getElementById('refreshBtn').addEventListener('click', () => {
-    activeView === 'invoice' ? renderInvoiceView() : loadRequests();
+    if(activeView === 'invoice'){
+      renderInvoiceView();
+    } else if(activeView === 'qr'){
+      renderQrView();
+    } else {
+      loadRequests();
+    }
   });
 
   document.querySelectorAll('.tab').forEach(btn => {
@@ -272,6 +298,8 @@ function renderContent(){
     renderMessagesView();
   } else if(activeView === 'invoice'){
     renderInvoiceView();
+  } else if(activeView === 'qr'){
+    renderQrView();
   } else {
     renderListView();
   }
@@ -1087,6 +1115,560 @@ function handleModalEscape(e){
   if(e.key === 'Escape'){
     closeCalendarRequestModal();
   }
+}
+
+/* =========================
+   QR CODE GENERATOR
+========================= */
+
+async function renderQrView(){
+  await loadDynamicQrCodes();
+
+  const selectedDynamic = selectedDynamicQr() || dynamicQrCodes[0] || null;
+
+  if(selectedDynamic && selectedDynamic.id !== selectedDynamicQrId){
+    selectedDynamicQrId = selectedDynamic.id;
+  }
+
+  document.getElementById('contentArea').innerHTML = `
+    <section class="qr-module">
+      <div class="qr-actions">
+        <div>
+          <div class="kicker">No Subscription QR Tools</div>
+          <h2>QR Code Generator</h2>
+          <p class="muted">Static codes go straight to one URL. Dynamic codes use your redirect link so the destination can be edited later.</p>
+        </div>
+
+        <div class="qr-action-buttons">
+          <button class="btn btn-secondary" id="qrResetBtn">Reset Style</button>
+          <button class="btn btn-light" id="qrSvgBtn">Download SVG</button>
+          <button class="btn btn-primary" id="qrPngBtn">Download PNG</button>
+        </div>
+      </div>
+
+      <div class="qr-type-grid">
+        <button class="qr-type-card ${qrMode === 'static' ? 'active' : ''}" data-qr-mode="static">
+          <strong>Static QR</strong>
+          <span>Final URL is baked into the code. Best for links that will not change after printing.</span>
+        </button>
+
+        <button class="qr-type-card ${qrMode === 'dynamic' ? 'active' : ''}" data-qr-mode="dynamic">
+          <strong>Dynamic QR</strong>
+          <span>Code points to a permanent redirect. Edit the destination here without reprinting.</span>
+        </button>
+      </div>
+
+      <div class="qr-workspace">
+        <div class="qr-editor-stack">
+          ${qrMode === 'dynamic' ? dynamicQrHtml(selectedDynamic) : staticQrHtml()}
+          ${qrStyleHtml()}
+        </div>
+
+        <aside class="qr-preview-card">
+          <div class="qr-preview-head">
+            <div>
+              <div class="kicker">${qrMode === 'dynamic' ? 'Dynamic Preview' : 'Static Preview'}</div>
+              <h3>Scannable Code</h3>
+            </div>
+            <span class="qr-mode-pill ${qrMode}">${qrMode}</span>
+          </div>
+
+          <div class="qr-canvas-wrap">
+            <canvas id="qrCanvas" width="420" height="420" aria-label="Generated QR code"></canvas>
+          </div>
+
+          <label class="qr-preview-label">${qrMode === 'dynamic' ? 'QR Encodes Redirect URL' : 'QR Encodes Destination URL'}</label>
+          <p class="muted qr-current-url" id="qrCurrentUrl">${escapeHtml(currentQrPayload())}</p>
+        </aside>
+      </div>
+    </section>`;
+
+  bindQrEvents();
+  generateQrCode(true);
+}
+
+function staticQrHtml(){
+  return `
+    <form class="qr-form" id="qrStaticForm">
+      <div class="qr-form-head">
+        <div>
+          <div class="kicker">Static QR</div>
+          <h3>Direct Link Code</h3>
+        </div>
+      </div>
+
+      <div class="qr-form-grid">
+        <div class="wide">
+          <label for="qrUrl">Destination URL</label>
+          <input class="input" id="qrUrl" type="url" required value="${escapeAttr(qrData.url)}" placeholder="https://yourwebsite.com/page">
+        </div>
+      </div>
+
+      <button class="btn btn-primary" type="submit">Generate Static QR</button>
+      <div class="notice" id="qrNotice"></div>
+    </form>`;
+}
+
+function dynamicQrHtml(selected){
+  return `
+    <div class="qr-dynamic-layout">
+      <form class="qr-form" id="qrDynamicForm">
+        <div class="qr-form-head">
+          <div>
+            <div class="kicker">Dynamic QR</div>
+            <h3>${selected ? 'Edit Redirect' : 'Create Redirect'}</h3>
+          </div>
+          ${selected ? `<button class="btn btn-secondary" type="button" id="newDynamicQrBtn">New</button>` : ''}
+        </div>
+
+        <div class="qr-form-grid">
+          <div>
+            <label for="dynamicQrTitle">Name</label>
+            <input class="input" id="dynamicQrTitle" required value="${escapeAttr(selected?.title || '')}" placeholder="Spring postcard">
+          </div>
+
+          <div>
+            <label for="dynamicQrSlug">Short Slug</label>
+            <input class="input" id="dynamicQrSlug" required value="${escapeAttr(selected?.slug || '')}" placeholder="spring-postcard">
+          </div>
+
+          <div class="wide">
+            <label for="dynamicQrDestination">Editable Destination URL</label>
+            <input class="input" id="dynamicQrDestination" type="url" required value="${escapeAttr(selected?.destination_url || 'https://reimage.business/start-with-us.html')}" placeholder="https://yourwebsite.com/current-offer">
+          </div>
+
+          <div>
+            <label for="dynamicQrActive">Status</label>
+            <select id="dynamicQrActive">
+              <option value="true" ${selected?.is_active !== false ? 'selected' : ''}>Active</option>
+              <option value="false" ${selected?.is_active === false ? 'selected' : ''}>Paused</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="qr-redirect-box">
+          <span>Permanent QR Link</span>
+          <strong id="dynamicQrRedirect">${escapeHtml(selected ? dynamicQrUrl(selected.slug) : `${QR_REDIRECT_BASE_URL}/your-slug`)}</strong>
+        </div>
+
+        <div class="action-row">
+          <button class="btn btn-primary" type="submit">${selected ? 'Save Dynamic QR' : 'Create Dynamic QR'}</button>
+          ${selected ? `<button class="btn btn-danger" type="button" id="deleteDynamicQrBtn">Delete</button>` : ''}
+        </div>
+
+        <div class="notice" id="qrNotice"></div>
+      </form>
+
+      <div class="qr-list-card">
+        <div class="qr-form-head">
+          <div>
+            <div class="kicker">Saved Redirects</div>
+            <h3>Dynamic Codes</h3>
+          </div>
+        </div>
+
+        <div class="qr-dynamic-list">
+          ${
+            dynamicQrCodes.length
+              ? dynamicQrCodes.map(code => dynamicQrRow(code)).join('')
+              : `<div class="empty-detail">No dynamic QR codes yet.</div>`
+          }
+        </div>
+      </div>
+    </div>`;
+}
+
+function qrStyleHtml(){
+  return `
+    <form class="qr-form qr-style-form" id="qrStyleForm">
+      <div class="qr-form-head">
+        <div>
+          <div class="kicker">Code Style</div>
+          <h3>Download Settings</h3>
+        </div>
+      </div>
+
+      <div class="qr-form-grid">
+        <div>
+          <label for="qrFileName">File Name</label>
+          <input class="input" id="qrFileName" value="${escapeAttr(qrData.fileName)}" placeholder="business-card-qr">
+        </div>
+
+        <div>
+          <label for="qrSize">PNG Size</label>
+          <select id="qrSize">
+            ${[600,800,1000,1400,2000].map(size => `
+              <option value="${size}" ${Number(qrData.size) === size ? 'selected' : ''}>${size} px</option>
+            `).join('')}
+          </select>
+        </div>
+
+        <div>
+          <label for="qrColorDark">Code Color</label>
+          <input class="input" id="qrColorDark" type="color" value="${escapeAttr(qrData.colorDark)}">
+        </div>
+
+        <div>
+          <label for="qrColorLight">Background</label>
+          <input class="input" id="qrColorLight" type="color" value="${escapeAttr(qrData.colorLight)}">
+        </div>
+      </div>
+    </form>`;
+}
+
+function dynamicQrRow(code){
+  return `
+    <button class="qr-dynamic-row ${selectedDynamicQrId === code.id ? 'active' : ''}" data-dynamic-id="${escapeAttr(code.id)}">
+      <span>
+        <strong>${escapeHtml(code.title)}</strong>
+        <em>${escapeHtml(dynamicQrUrl(code.slug))}</em>
+      </span>
+      <small>${code.is_active ? 'Active' : 'Paused'} &middot; ${Number(code.scan_count || 0)} scans</small>
+    </button>`;
+}
+
+function bindQrEvents(){
+  document.querySelectorAll('[data-qr-mode]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      qrMode = btn.dataset.qrMode;
+      renderQrView();
+    });
+  });
+
+  const staticForm = document.getElementById('qrStaticForm');
+  if(staticForm){
+    staticForm.addEventListener('submit', e => {
+      e.preventDefault();
+      updateQrDataFromForm();
+      generateQrCode();
+    });
+  }
+
+  const dynamicForm = document.getElementById('qrDynamicForm');
+  if(dynamicForm){
+    dynamicForm.addEventListener('submit', saveDynamicQr);
+  }
+
+  const newDynamicQrBtn = document.getElementById('newDynamicQrBtn');
+  if(newDynamicQrBtn){
+    newDynamicQrBtn.addEventListener('click', () => {
+      selectedDynamicQrId = null;
+      renderQrView();
+    });
+  }
+
+  const deleteDynamicQrBtn = document.getElementById('deleteDynamicQrBtn');
+  if(deleteDynamicQrBtn){
+    deleteDynamicQrBtn.addEventListener('click', deleteDynamicQr);
+  }
+
+  document.querySelectorAll('.qr-dynamic-row').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedDynamicQrId = btn.dataset.dynamicId;
+      qrMode = 'dynamic';
+      renderQrView();
+    });
+  });
+
+  ['qrUrl','qrFileName','qrSize','qrColorDark','qrColorLight','dynamicQrSlug'].forEach(id => {
+    const input = document.getElementById(id);
+    if(!input) return;
+
+    input.addEventListener('input', () => {
+      updateQrDataFromForm();
+      updateDynamicRedirectPreview();
+      generateQrCode(true);
+    });
+
+    input.addEventListener('change', () => {
+      updateQrDataFromForm();
+      updateDynamicRedirectPreview();
+      generateQrCode(true);
+    });
+  });
+
+  document.getElementById('qrResetBtn').addEventListener('click', () => {
+    qrData = {
+      ...qrData,
+      fileName: 'reimage-qr-code',
+      colorDark: '#0c1f2e',
+      colorLight: '#ffffff',
+      size: 1000,
+      margin: 3
+    };
+    renderQrView();
+  });
+
+  document.getElementById('qrPngBtn').addEventListener('click', downloadQrPng);
+  document.getElementById('qrSvgBtn').addEventListener('click', downloadQrSvg);
+}
+
+function updateQrDataFromForm(){
+  const staticUrl = document.getElementById('qrUrl');
+  const fileName = document.getElementById('qrFileName');
+  const dark = document.getElementById('qrColorDark');
+  const light = document.getElementById('qrColorLight');
+  const size = document.getElementById('qrSize');
+
+  qrData = {
+    ...qrData,
+    url: staticUrl ? staticUrl.value.trim() : qrData.url,
+    fileName: fileName ? sanitizeFileName(fileName.value.trim() || 'qr-code') : qrData.fileName,
+    colorDark: dark ? dark.value : qrData.colorDark,
+    colorLight: light ? light.value : qrData.colorLight,
+    size: size ? Number(size.value) : qrData.size
+  };
+}
+
+async function loadDynamicQrCodes(){
+  const { data, error } = await supabase
+    .from('dynamic_qr_codes')
+    .select('*')
+    .order('created_at', { ascending:false });
+
+  if(error){
+    dynamicQrCodes = [];
+    console.error('Dynamic QR load failed:', error);
+    return;
+  }
+
+  dynamicQrCodes = data || [];
+}
+
+async function saveDynamicQr(e){
+  e.preventDefault();
+  updateQrDataFromForm();
+
+  const notice = document.getElementById('qrNotice');
+  const selected = selectedDynamicQr();
+  const payload = {
+    title: document.getElementById('dynamicQrTitle').value.trim(),
+    slug: slugify(document.getElementById('dynamicQrSlug').value.trim()),
+    destination_url: document.getElementById('dynamicQrDestination').value.trim(),
+    is_active: document.getElementById('dynamicQrActive').value === 'true'
+  };
+
+  if(!payload.title || !payload.slug){
+    showQrError('Add a name and short slug first.');
+    return;
+  }
+
+  if(!isValidQrUrl(payload.destination_url)){
+    showQrError('Enter a full destination URL that starts with http:// or https://.');
+    return;
+  }
+
+  notice.className = 'notice show';
+  notice.textContent = selected ? 'Saving dynamic QR...' : 'Creating dynamic QR...';
+
+  const query = selected
+    ? supabase.from('dynamic_qr_codes').update(payload).eq('id', selected.id).select().single()
+    : supabase.from('dynamic_qr_codes').insert([{ ...payload, created_by: session.user.id }]).select().single();
+
+  const { data, error } = await query;
+
+  if(error){
+    notice.className = 'notice show error';
+    notice.textContent = error.message;
+    return;
+  }
+
+  selectedDynamicQrId = data.id;
+  qrData.fileName = sanitizeFileName(data.slug);
+  await renderQrView();
+}
+
+async function deleteDynamicQr(){
+  const selected = selectedDynamicQr();
+  if(!selected || !confirm(`Delete dynamic QR "${selected.title}"? Printed codes for this slug will stop working.`)) return;
+
+  const notice = document.getElementById('qrNotice');
+  notice.className = 'notice show';
+  notice.textContent = 'Deleting dynamic QR...';
+
+  const { error } = await supabase
+    .from('dynamic_qr_codes')
+    .delete()
+    .eq('id', selected.id);
+
+  if(error){
+    notice.className = 'notice show error';
+    notice.textContent = error.message;
+    return;
+  }
+
+  selectedDynamicQrId = null;
+  await renderQrView();
+}
+
+async function generateQrCode(quiet = false){
+  const canvas = document.getElementById('qrCanvas');
+  const notice = document.getElementById('qrNotice');
+  const urlLabel = document.getElementById('qrCurrentUrl');
+  const payload = currentQrPayload();
+
+  if(!canvas) return false;
+
+  if(!isValidQrUrl(payload)){
+    if(!quiet) showQrError();
+    return false;
+  }
+
+  try{
+    await QRCode.toCanvas(canvas, payload, qrOptions(420));
+
+    if(urlLabel){
+      urlLabel.textContent = payload;
+    }
+
+    if(!quiet && notice){
+      notice.className = 'notice show';
+      notice.textContent = 'QR code generated.';
+    }
+
+    return true;
+  } catch(error){
+    showQrError(error.message || 'QR generation failed.');
+    return false;
+  }
+}
+
+async function downloadQrPng(){
+  updateQrDataFromForm();
+
+  const payload = currentQrPayload();
+
+  if(!isValidQrUrl(payload)){
+    showQrError();
+    return;
+  }
+
+  try{
+    const dataUrl = await QRCode.toDataURL(payload, qrOptions(qrData.size));
+    downloadDataUrl(dataUrl, `${downloadQrFileName()}.png`);
+  } catch(error){
+    showQrError(error.message);
+  }
+}
+
+async function downloadQrSvg(){
+  updateQrDataFromForm();
+
+  const payload = currentQrPayload();
+
+  if(!isValidQrUrl(payload)){
+    showQrError();
+    return;
+  }
+
+  try{
+    const svg = await QRCode.toString(payload, {
+      ...qrOptions(qrData.size),
+      type: 'svg'
+    });
+
+    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    downloadDataUrl(URL.createObjectURL(blob), `${downloadQrFileName()}.svg`, true);
+  } catch(error){
+    showQrError(error.message);
+  }
+}
+
+function currentQrPayload(){
+  if(qrMode === 'dynamic'){
+    const selected = selectedDynamicQr();
+    const slugInput = document.getElementById('dynamicQrSlug');
+    const slug = slugInput?.value || selected?.slug || 'your-slug';
+
+    return dynamicQrUrl(slug);
+  }
+
+  const staticUrl = document.getElementById('qrUrl');
+  return staticUrl ? staticUrl.value.trim() : qrData.url;
+}
+
+function selectedDynamicQr(){
+  return dynamicQrCodes.find(code => code.id === selectedDynamicQrId) || null;
+}
+
+function dynamicQrUrl(slug){
+  return `${QR_REDIRECT_BASE_URL}/${slugify(slug || 'your-slug')}`;
+}
+
+function updateDynamicRedirectPreview(){
+  const preview = document.getElementById('dynamicQrRedirect');
+  if(!preview) return;
+
+  const slug = document.getElementById('dynamicQrSlug')?.value || selectedDynamicQr()?.slug || 'your-slug';
+  preview.textContent = dynamicQrUrl(slug);
+}
+
+function downloadQrFileName(){
+  if(qrMode === 'dynamic'){
+    const selected = selectedDynamicQr();
+    const slug = selected?.slug || document.getElementById('dynamicQrSlug')?.value || qrData.fileName;
+    return sanitizeFileName(slug);
+  }
+
+  return qrData.fileName;
+}
+
+function qrOptions(width){
+  return {
+    errorCorrectionLevel: 'H',
+    type: 'image/png',
+    width,
+    margin: qrData.margin,
+    color: {
+      dark: qrData.colorDark,
+      light: qrData.colorLight
+    }
+  };
+}
+
+function showQrError(message = 'Enter a full URL that starts with http:// or https://.'){
+  const notice = document.getElementById('qrNotice');
+
+  notice.className = 'notice show error';
+  notice.textContent = message;
+}
+
+function isValidQrUrl(value){
+  try{
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol);
+  } catch(_error){
+    return false;
+  }
+}
+
+function downloadDataUrl(href, fileName, revoke = false){
+  const link = document.createElement('a');
+  link.href = href;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  if(revoke){
+    URL.revokeObjectURL(href);
+  }
+}
+
+function sanitizeFileName(value){
+  return String(value || 'qr-code')
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'qr-code';
+}
+
+function slugify(value){
+  return String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'qr-code';
 }
 
 
