@@ -749,41 +749,6 @@ body.modal-open{
   justify-content:flex-end;
 }
 
-.qr-type-grid{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:1rem;
-}
-
-.qr-type-card{
-  text-align:left;
-  border:1px solid rgba(255,255,255,.10);
-  background:rgba(255,255,255,.045);
-  color:#fff;
-  border-radius:18px;
-  padding:1rem;
-  min-height:112px;
-  transition:.2s ease;
-}
-
-.qr-type-card:hover,
-.qr-type-card.active{
-  transform:translateY(-1px);
-  border-color:rgba(43,163,184,.45);
-  background:rgba(43,163,184,.13);
-}
-
-.qr-type-card strong{
-  display:block;
-  font-size:1.05rem;
-  margin-bottom:.45rem;
-}
-
-.qr-type-card span{
-  color:var(--light-gray);
-  line-height:1.5;
-}
-
 .qr-workspace{
   display:grid;
   grid-template-columns:minmax(0,1fr) 460px;
@@ -860,11 +825,6 @@ body.modal-open{
   text-transform:uppercase;
   letter-spacing:.08em;
   border:1px solid rgba(255,255,255,.12);
-}
-
-.qr-mode-pill.static{
-  color:#8fe8f8;
-  background:rgba(43,163,184,.13);
 }
 
 .qr-mode-pill.dynamic{
@@ -984,7 +944,6 @@ body.modal-open{
   }
 
   .qr-workspace,
-  .qr-type-grid,
   .qr-form-grid{
     grid-template-columns:1fr;
   }
