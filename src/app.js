@@ -31,7 +31,7 @@ let qrData = {
 let dynamicQrCodes = [];
 let selectedDynamicQrId = null;
 
-const DEFAULT_INVOICE_SERVICE = 'Website Starter';
+const DEFAULT_INVOICE_SERVICE = 'Static Website + SEO';
 
 const STATUS_OPTIONS = ['new', 'contacted', 'closed', 'spam'];
 
@@ -1665,28 +1665,60 @@ function slugify(value){
 
 const INVOICE_SERVICES = [
   {
-    name: 'Website Starter',
+    name: 'Static Website + SEO',
     category: 'Website Development',
-    defaultRate: 99,
+    defaultRate: 449,
     billingCycle: 'one-time',
     quantityLabel: 'Project',
-    description: 'Starter website setup.'
+    description: 'Clean static website with mobile-friendly design, Google/Bing indexing, sitemap, robots.txt, llms.txt, basic SEO, analytics, contact forms, and launch setup.'
   },
   {
-    name: 'Website Monthly Hosting / Maintenance',
+    name: 'Website Hosting / Maintenance',
     category: 'Website Development',
     defaultRate: 29.99,
     billingCycle: 'monthly',
     quantityLabel: 'Month',
-    description: 'Monthly website hosting, maintenance, and basic support.'
+    description: 'Monthly website hosting, maintenance, basic support, and uptime care.'
   },
   {
-    name: 'Website Development Package',
+    name: 'Dynamic Website with QR & Status Page',
     category: 'Website Development',
-    defaultRate: 249.99,
+    defaultRate: 599,
     billingCycle: 'one-time',
     quantityLabel: 'Project',
-    description: 'Website development package.'
+    description: 'Dynamic website with QR-code landing pages, link hub, customer-facing status pages, order tracking, service progress tracking, and appointment status updates.'
+  },
+  {
+    name: 'Dynamic Website with Payments & Scripted Chatbot',
+    category: 'Website Development',
+    defaultRate: 999,
+    billingCycle: 'one-time',
+    quantityLabel: 'Project',
+    description: 'Dynamic website with customer accounts, secure user logins, Stripe or Square payment integration, online payments, booking, scripted chatbot, and customer intake forms.'
+  },
+  {
+    name: 'Business Portal Suite',
+    category: 'Website Development',
+    defaultRate: 1299,
+    billingCycle: 'one-time',
+    quantityLabel: 'Project',
+    description: 'Custom business portal suite with admin portal, client portal, user management, subscriptions, inventory, integrations, custom invoices, order dashboards, and reporting tools.'
+  },
+  {
+    name: 'Portal Suite Monthly Hosting / Maintenance',
+    category: 'Website Development',
+    defaultRate: 49.99,
+    billingCycle: 'monthly',
+    quantityLabel: 'Month',
+    description: 'Monthly hosting, maintenance, and support for portal, database, and business system infrastructure.'
+  },
+  {
+    name: 'AI Automation Suite',
+    category: 'Website Development',
+    defaultRate: 1699,
+    billingCycle: 'one-time',
+    quantityLabel: 'Project',
+    description: 'AI automation suite with workflow automation, lead capture, email/SMS follow-ups, Google Sheets or CRM integration, reminders, internal notifications, support workflows, invoice automation, APIs, and webhooks.'
   },
   {
     name: 'Website Add-On / Extra Page',
@@ -2199,6 +2231,11 @@ function serviceOptions(){
     'Full Scale System',
     'Social Media Management',
     'Website Development',
+    'Static Website + SEO',
+    'Dynamic Website with QR & Status Page',
+    'Dynamic Website with Payments & Scripted Chatbot',
+    'Business Portal Suite',
+    'AI Automation Suite',
     'AI Automation',
     'General Question'
   ];
