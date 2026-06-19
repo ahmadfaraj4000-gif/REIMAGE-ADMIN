@@ -59,6 +59,24 @@ button,input,select,textarea{font-family:'Barlow',sans-serif}button{cursor:point
 @media(max-width:1100px){.stats{grid-template-columns:repeat(2,1fr)}.toolbar{grid-template-columns:1fr 1fr}.leads-layout,.calendar-view{grid-template-columns:1fr}}
 @media(max-width:720px){.topbar{padding:0 1rem;min-height:74px}.brand img{height:52px}.brand span,.admin-email{display:none}.main{padding:1rem}.stats{grid-template-columns:1fr}.toolbar{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}}
 
+/* ===== SALES TEAM ADMIN ===== */
+.sales-admin-grid{display:grid;grid-template-columns:430px 1fr;gap:1.2rem;align-items:start;margin-bottom:1.2rem}
+.sales-admin-bottom{grid-template-columns:1fr 1fr}
+.sales-pipeline{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.6rem;padding:1rem;border-bottom:1px solid rgba(255,255,255,.08)}
+.sales-pipeline div{min-height:90px;padding:.8rem;border-radius:14px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;overflow:hidden}
+.sales-pipeline strong,.sales-pipeline span{display:block}
+.sales-pipeline strong{min-height:2.25rem;width:100%;color:var(--light-gray);font-size:.76rem;line-height:1.08;text-transform:uppercase;letter-spacing:.08em;overflow-wrap:anywhere}
+.sales-pipeline span{font-size:1.6rem;font-weight:900;color:#fff;margin-top:.45rem;line-height:1}
+.sales-list{padding:.75rem;max-height:690px;overflow:auto}
+.sales-row{width:100%;display:block;text-align:left;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035);color:#fff;border-radius:18px;padding:1rem;margin-bottom:.75rem;transition:.2s ease}
+button.sales-row:hover,.sales-row.active{background:rgba(43,163,184,.13);border-color:rgba(43,163,184,.35);transform:translateY(-1px)}
+.sales-row strong,.sales-row span,.sales-row small{display:block}
+.sales-row span{color:var(--light-gray);line-height:1.5;margin-top:.25rem}
+.sales-row small{color:var(--gray);font-weight:800;font-size:.78rem;margin-top:.45rem}
+.sales-assignment{margin-top:1.2rem;padding-top:1.2rem;border-top:1px solid rgba(255,255,255,.08)}
+.sales-assignment h3{font-size:1.5rem;margin-bottom:.8rem}
+@media(max-width:1100px){.sales-admin-grid,.sales-admin-bottom{grid-template-columns:1fr}.sales-pipeline{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
 
 /* ===== CALENDAR REQUEST POPUP MODAL ===== */
 body.modal-open{
@@ -148,6 +166,80 @@ body.modal-open{
     align-items:flex-start;
   }
 }
+
+/* ===== RE IMAGE Pearl Portal Refresh ===== */
+:root{
+  --portal-ink:#071826;
+  --portal-text:#102537;
+  --portal-muted:#5d7180;
+  --portal-soft:#edf6f8;
+  --portal-pearl:#f4f8f9;
+  --portal-line:rgba(16,37,55,.12);
+  --portal-shadow:0 24px 72px rgba(7,24,38,.10);
+}
+body{
+  background:radial-gradient(circle at 82% 4%,rgba(26,122,138,.12),transparent 28rem),linear-gradient(180deg,#fff 0%,var(--portal-pearl) 45%,#fff 100%)!important;
+  color:var(--portal-text)!important;
+}
+.topbar{
+  top:18px!important;
+  width:min(1520px,calc(100% - 48px))!important;
+  margin:18px auto 0!important;
+  min-height:68px!important;
+  border:1px solid rgba(26,122,138,.13)!important;
+  border-radius:999px!important;
+  background:rgba(255,255,255,.86)!important;
+  box-shadow:0 16px 60px rgba(7,24,38,.08)!important;
+  backdrop-filter:blur(20px)!important;
+}
+.brand,.admin-email,.email{color:var(--portal-ink)!important}
+.brand img{height:50px!important}
+.main{max-width:1480px!important;padding:2rem 1.5rem!important}
+.login-card,.table-card,.detail-card,.calendar-card,.crm-month-card,.messages-sidebar,.messages-panel,.request-modal,.stat-card,.toolbar,.calendar-legend,.sales-row,.info-box,.message-box,.sales-pipeline div{
+  border:1px solid rgba(26,122,138,.13)!important;
+  background:rgba(255,255,255,.78)!important;
+  color:var(--portal-text)!important;
+  box-shadow:var(--portal-shadow)!important;
+  backdrop-filter:blur(18px)!important;
+}
+.request-modal-backdrop{background:rgba(7,24,38,.38)!important}
+.table-head,.detail-head,.messages-top,.request-modal-head{border-bottom:1px solid var(--portal-line)!important}
+h1,h2,h3,.crm-month-title,.sales-pipeline span,.stat-card strong,.info-box strong,.info-box a,.message-thread-row strong,.sales-row strong,.crm-day-number{color:var(--portal-ink)!important}
+.muted,.stat-card span,label,td,.message-box,.empty-detail,.sales-row span,.sales-row small,.calendar-legend span,.month-count,.info-box span,.modal-status-row,.messages-top span,.crm-day{color:var(--portal-muted)!important}
+.input,select,textarea,input{
+  background:#fff!important;
+  color:var(--portal-ink)!important;
+  border:1px solid var(--portal-line)!important;
+  border-radius:16px!important;
+}
+.input:focus,select:focus,textarea:focus,input:focus{
+  border-color:rgba(26,122,138,.54)!important;
+  box-shadow:0 0 0 4px rgba(26,122,138,.10)!important;
+}
+.btn,.tab,.month-arrow,.today-pill{
+  border-radius:999px!important;
+  text-transform:none!important;
+  letter-spacing:.01em!important;
+}
+.btn-primary,.tab.active{
+  background:var(--teal)!important;
+  color:#fff!important;
+  border-color:var(--teal)!important;
+  box-shadow:0 14px 32px rgba(26,122,138,.20)!important;
+}
+.btn-secondary,.tab,.month-arrow,.today-pill,.btn-light{
+  background:#fff!important;
+  color:var(--portal-ink)!important;
+  border:1px solid var(--portal-line)!important;
+}
+th{background:var(--portal-soft)!important;color:var(--teal-dark)!important}
+td,th{border-bottom:1px solid var(--portal-line)!important}
+tr:hover,tr.active,.sales-row:hover,.sales-row.active,.message-thread-row:hover,.message-thread-row.active{background:rgba(26,122,138,.08)!important}
+.crm-dow{background:var(--portal-soft)!important;color:var(--portal-muted)!important}
+.crm-day{background:rgba(255,255,255,.54)!important;border-color:var(--portal-line)!important}
+@media(max-width:720px){
+  .topbar{width:min(100% - 24px,720px)!important;border-radius:24px!important;align-items:center!important}
+}
 /* ===== ADMIN MESSAGES PAGE ===== */
 
 .messages-page{
@@ -225,9 +317,10 @@ body.modal-open{
 }
 
 .message-thread-row p{
-  color:var(--light-gray);
+  color:var(--portal-muted);
   line-height:1.5;
   font-size:.92rem;
+  font-weight:700;
   display:-webkit-box;
   -webkit-line-clamp:2;
   -webkit-box-orient:vertical;
@@ -951,6 +1044,105 @@ body.modal-open{
   .qr-form-grid .wide{
     grid-column:auto;
   }
+}
+
+/* ===== Pearl admin readability fixes ===== */
+.badge-new{
+  background:rgba(43,163,184,.16)!important;
+  color:var(--teal-dark)!important;
+  border-color:rgba(26,122,138,.32)!important;
+}
+
+.badge-contacted{
+  background:rgba(200,146,42,.16)!important;
+  color:#8b5f08!important;
+  border-color:rgba(200,146,42,.32)!important;
+}
+
+.badge-closed{
+  background:rgba(43,163,111,.16)!important;
+  color:#176b48!important;
+  border-color:rgba(43,163,111,.32)!important;
+}
+
+.badge-spam{
+  background:rgba(217,75,75,.14)!important;
+  color:#9f2525!important;
+  border-color:rgba(217,75,75,.28)!important;
+}
+
+.qr-form,
+.qr-preview-card,
+.qr-list-card,
+.qr-actions{
+  background:rgba(255,255,255,.78)!important;
+  border-color:rgba(26,122,138,.13)!important;
+  color:var(--portal-text)!important;
+  box-shadow:var(--portal-shadow)!important;
+}
+
+.qr-redirect-box{
+  background:rgba(237,246,248,.9)!important;
+  border-color:rgba(26,122,138,.18)!important;
+}
+
+.qr-redirect-box span,
+.qr-preview-label{
+  color:var(--portal-muted)!important;
+}
+
+.qr-redirect-box strong,
+.qr-current-url,
+.qr-dynamic-row strong{
+  color:var(--portal-ink)!important;
+}
+
+.qr-dynamic-row{
+  background:rgba(255,255,255,.72)!important;
+  border-color:rgba(26,122,138,.14)!important;
+  color:var(--portal-text)!important;
+}
+
+.qr-dynamic-row:hover,
+.qr-dynamic-row.active{
+  background:rgba(26,122,138,.08)!important;
+  border-color:rgba(26,122,138,.32)!important;
+}
+
+.qr-dynamic-row em{
+  color:var(--portal-muted)!important;
+  font-weight:700;
+}
+
+.qr-dynamic-row small,
+.qr-mode-pill.dynamic{
+  color:#9a680c!important;
+}
+
+.sales-pipeline{
+  grid-template-columns:repeat(5,minmax(70px,1fr));
+}
+
+.sales-pipeline div{
+  align-items:center!important;
+  text-align:center;
+}
+
+.sales-pipeline strong{
+  min-height:2.6rem;
+  display:flex!important;
+  align-items:flex-start;
+  justify-content:center;
+  color:var(--portal-muted)!important;
+  font-size:.7rem;
+  line-height:1.12;
+  letter-spacing:.035em;
+  text-wrap:balance;
+}
+
+.sales-pipeline span{
+  width:100%;
+  text-align:center;
 }
 
 

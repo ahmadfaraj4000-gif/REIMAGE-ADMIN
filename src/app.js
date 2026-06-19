@@ -30,6 +30,12 @@ let qrData = {
 };
 let dynamicQrCodes = [];
 let selectedDynamicQrId = null;
+let salesApplications = [];
+let salesmanProfiles = [];
+let salesLeads = [];
+let salesInvoiceRequests = [];
+let salesQrRequests = [];
+let selectedSalesApplicationId = null;
 
 const DEFAULT_INVOICE_SERVICE = 'Static Website + SEO';
 
@@ -135,11 +141,12 @@ async function renderAdmin(){
           <button class="tab ${activeView === 'list' ? 'active' : ''}" data-view="list">List View</button>
           <button class="tab ${activeView === 'calendar' ? 'active' : ''}" data-view="calendar">Calendar View</button>
           <button class="tab ${activeView === 'messages' ? 'active' : ''}" data-view="messages">Messages</button>
+          <button class="tab ${activeView === 'sales' ? 'active' : ''}" data-view="sales">Sales Team</button>
           <button class="tab ${activeView === 'invoice' ? 'active' : ''}" data-view="invoice">Invoices</button>
           <button class="tab ${activeView === 'qr' ? 'active' : ''}" data-view="qr">QR Codes</button>
         </div>
 
-        ${['invoice','qr'].includes(activeView) ? '' : `
+        ${['invoice','qr','sales'].includes(activeView) ? '' : `
           <div class="toolbar">
             <input class="input" id="searchInput" placeholder="Search name, email, business, message..." value="${escapeAttr(filters.search)}">
             <select id="serviceFilter"></select>
@@ -166,6 +173,12 @@ async function renderAdmin(){
     return;
   }
 
+  if(activeView === 'sales'){
+    renderStats();
+    await renderSalesTeamView();
+    return;
+  }
+
   await loadRequests();
 }
 
@@ -176,6 +189,8 @@ function bindTopEvents(){
       renderInvoiceView();
     } else if(activeView === 'qr'){
       renderQrView();
+    } else if(activeView === 'sales'){
+      renderSalesTeamView();
     } else {
       loadRequests();
     }
@@ -1729,30 +1744,6 @@ const INVOICE_SERVICES = [
     description: 'Website add-on, extra page, or small upgrade.'
   },
   {
-    name: 'Professional Reel',
-    category: 'Social Media Management',
-    defaultRate: 149,
-    billingCycle: 'one-time',
-    quantityLabel: 'Reel',
-    description: 'Professionally shot reel with researched hook, caption, and call to action.'
-  },
-  {
-    name: '3-Reel Content Package',
-    category: 'Social Media Management',
-    defaultRate: 399,
-    billingCycle: 'one-time',
-    quantityLabel: 'Package',
-    description: 'Three professional reels for social media content.'
-  },
-  {
-    name: 'Account Management Support',
-    category: 'Social Media Management',
-    defaultRate: 99,
-    billingCycle: 'weekly',
-    quantityLabel: 'Week',
-    description: 'Weekly social media account management support using owner-provided content.'
-  },
-  {
     name: 'AI Receptionist Phone',
     category: 'AI Receptionists',
     defaultRate: 99,
@@ -2220,6 +2211,276 @@ function updateInvoiceItemTotal(row, id){
 }
 
 /* =========================
+   SALES TEAM ADMIN
+========================= */
+
+async function renderSalesTeamView(){
+  const area = document.getElementById('contentArea');
+  area.innerHTML = '<div class="table-card"><div class="detail-body muted">Loading sales team data...</div></div>';
+
+  const [apps, profiles, leads, invoices, qrs] = await Promise.all([
+    supabase.from('sales_applications').select('*').order('submitted_at', { ascending:false }),
+    supabase.from('salesman_profiles').select('*').order('created_at', { ascending:false }),
+    supabase.from('sales_leads').select('*').order('updated_at', { ascending:false }),
+    supabase.from('invoice_requests').select('*').order('created_at', { ascending:false }),
+    supabase.from('qr_code_requests').select('*').order('created_at', { ascending:false })
+  ]);
+
+  const firstError = [apps, profiles, leads, invoices, qrs].find(result => result.error)?.error;
+  if(firstError){
+    area.innerHTML = `
+      <div class="table-card">
+        <div class="detail-body notice show error">${escapeHtml(firstError.message)}</div>
+        <div class="detail-body muted">Make sure supabase/sql/salesman_portal.sql has been run.</div>
+      </div>`;
+    return;
+  }
+
+  salesApplications = apps.data || [];
+  salesmanProfiles = profiles.data || [];
+  salesLeads = leads.data || [];
+  salesInvoiceRequests = invoices.data || [];
+  salesQrRequests = qrs.data || [];
+
+  if(!selectedSalesApplicationId && salesApplications.length){
+    selectedSalesApplicationId = salesApplications[0].id;
+  }
+
+  renderSalesTeamContent();
+}
+
+function renderSalesTeamContent(){
+  const area = document.getElementById('contentArea');
+  const selected = salesApplications.find(appItem => appItem.id === selectedSalesApplicationId) || salesApplications[0] || null;
+  const activeProfiles = salesmanProfiles.filter(profile => ['active_salesman','testing','onboarding','accepted'].includes(profile.status));
+  const pendingRequests = [...salesInvoiceRequests, ...salesQrRequests].filter(request => !['completed','closed'].includes(request.status || 'pending'));
+
+  area.innerHTML = `
+    <div class="sales-admin-grid">
+      <section class="table-card">
+        <div class="table-head">
+          <div>
+            <div class="kicker">Sales Pipeline</div>
+            <h2>Applications</h2>
+          </div>
+          <span class="badge badge-new">${salesApplications.length} total</span>
+        </div>
+        <div class="sales-pipeline">
+          ${['pending_review','accepted','onboarding','testing','active_salesman'].map(status => `
+            <div><strong>${titleCase(status)}</strong><span>${salesApplications.filter(appItem => appItem.status === status).length}</span></div>
+          `).join('')}
+        </div>
+        <div class="sales-list">
+          ${salesApplications.length ? salesApplications.map(appItem => salesApplicationRow(appItem, selected)).join('') : '<div class="detail-body muted">No sales applications yet.</div>'}
+        </div>
+      </section>
+
+      <section class="detail-card">
+        <div class="detail-head">
+          <h2>${selected ? escapeHtml(selected.full_name || 'Applicant') : 'No Applicant'}</h2>
+          ${selected ? salesStatusBadge(selected.status) : ''}
+        </div>
+        <div class="detail-body">
+          ${selected ? salesApplicationDetail(selected) : '<div class="empty-detail">Select an application.</div>'}
+        </div>
+      </section>
+    </div>
+
+    <div class="sales-admin-grid sales-admin-bottom">
+      <section class="table-card">
+        <div class="table-head"><h2>Active / Approved Salesmen</h2></div>
+        <div class="sales-list">
+          ${activeProfiles.length ? activeProfiles.map(profile => `
+            <div class="sales-row">
+              <strong>${escapeHtml(profile.full_name || profile.email || 'Salesman')}</strong>
+              <span>${escapeHtml(profile.email || '')}</span>
+              <small>${titleCase(profile.status)} · ${profile.commission_rate || 20}% commission</small>
+            </div>
+          `).join('') : '<div class="detail-body muted">No approved salesmen yet.</div>'}
+        </div>
+      </section>
+
+      <section class="table-card">
+        <div class="table-head"><h2>Open Sales Requests</h2><span class="badge badge-contacted">${pendingRequests.length} pending</span></div>
+        <div class="sales-list">
+          ${pendingRequests.length ? pendingRequests.map(request => salesRequestRow(request)).join('') : '<div class="detail-body muted">No open invoice or QR requests.</div>'}
+        </div>
+      </section>
+    </div>
+  `;
+
+  bindSalesTeamEvents();
+}
+
+function salesApplicationRow(appItem, selected){
+  return `
+    <button class="sales-row ${selected && selected.id === appItem.id ? 'active' : ''}" data-sales-application-id="${escapeAttr(appItem.id)}">
+      <strong>${escapeHtml(appItem.full_name || 'Applicant')}</strong>
+      <span>${escapeHtml(appItem.email || '')}</span>
+      <small>${titleCase(appItem.status || 'pending_review')} · ${formatDateTime(appItem.submitted_at)}</small>
+    </button>`;
+}
+
+function salesApplicationDetail(appItem){
+  const profile = salesmanProfiles.find(profileItem => profileItem.user_id === appItem.user_id);
+  const assigned = profile ? salesLeads.filter(lead => lead.assigned_salesman_id === profile.id) : [];
+
+  return `
+    <div class="detail-grid">
+      <div class="info-box"><span>Email</span><strong>${escapeHtml(appItem.email || '—')}</strong></div>
+      <div class="info-box"><span>Phone</span><strong>${escapeHtml(appItem.phone || '—')}</strong></div>
+      <div class="info-box"><span>City / State</span><strong>${escapeHtml(appItem.city_state || '—')}</strong></div>
+      <div class="info-box"><span>Test Score</span><strong>${appItem.test_score ? `${escapeHtml(appItem.test_score)}%` : '—'}</strong></div>
+    </div>
+
+    <div class="message-box"><strong>Sales Experience</strong><br>${escapeHtml(appItem.sales_experience || '—')}</div>
+    <div class="message-box"><strong>Why Join</strong><br>${escapeHtml(appItem.why_join || '—')}</div>
+    <div class="message-box"><strong>Industries</strong><br>${escapeHtml(appItem.industries || '—')}</div>
+    <div class="message-box"><strong>Availability</strong><br>${escapeHtml(appItem.availability || '—')}</div>
+
+    <label>Internal Notes</label>
+    <textarea class="input" id="salesAdminNotes">${escapeHtml(appItem.admin_notes || '')}</textarea>
+
+    <div class="action-row">
+      <button class="btn btn-primary" data-sales-action="accepted" data-id="${escapeAttr(appItem.id)}">Accept</button>
+      <button class="btn btn-secondary" data-sales-action="active_salesman" data-id="${escapeAttr(appItem.id)}">Activate</button>
+      <button class="btn btn-danger" data-sales-action="rejected" data-id="${escapeAttr(appItem.id)}">Reject</button>
+      <button class="btn btn-danger" data-sales-action="suspended" data-id="${escapeAttr(appItem.id)}">Suspend</button>
+      <button class="btn btn-light" id="saveSalesNotesBtn" data-id="${escapeAttr(appItem.id)}">Save Notes</button>
+    </div>
+
+    <div class="sales-assignment">
+      <h3>Assign Lead</h3>
+      <div class="detail-grid">
+        <input class="input" id="leadBusinessName" placeholder="Business name">
+        <input class="input" id="leadContactName" placeholder="Contact person">
+        <input class="input" id="leadPhone" placeholder="Phone">
+        <input class="input" id="leadEmail" placeholder="Email">
+        <input class="input" id="leadIndustry" placeholder="Industry">
+        <input class="input" id="leadService" placeholder="Service interested in">
+        <input class="input" id="leadValue" type="number" placeholder="Estimated deal value">
+        <input class="input" id="leadFollowUp" type="date">
+      </div>
+      <textarea class="input" id="leadNotes" placeholder="Admin notes"></textarea>
+      <button class="btn btn-primary" id="assignLeadBtn" data-profile-id="${escapeAttr(profile?.id || '')}">Assign Lead</button>
+    </div>
+
+    <div class="message-box"><strong>Assigned Leads</strong><br>${assigned.length ? assigned.map(lead => `${escapeHtml(lead.business_name)} — ${titleCase(lead.status || 'new')}`).join('<br>') : 'No assigned leads yet.'}</div>
+  `;
+}
+
+function salesRequestRow(request){
+  const isInvoice = 'service_package' in request;
+  return `
+    <div class="sales-row">
+      <strong>${escapeHtml(request.client_name || 'Client')}</strong>
+      <span>${isInvoice ? `Invoice · ${escapeHtml(request.service_package || '')}` : `QR · ${escapeHtml(request.destination_url || '')}`}</span>
+      <small>${titleCase(request.status || 'pending')} · ${formatDateTime(request.created_at)}</small>
+      <div class="action-row">
+        <button class="btn btn-light" data-request-table="${isInvoice ? 'invoice_requests' : 'qr_code_requests'}" data-request-id="${escapeAttr(request.id)}" data-request-status="in_progress">In Progress</button>
+        <button class="btn btn-primary" data-request-table="${isInvoice ? 'invoice_requests' : 'qr_code_requests'}" data-request-id="${escapeAttr(request.id)}" data-request-status="completed">Complete</button>
+      </div>
+    </div>`;
+}
+
+function bindSalesTeamEvents(){
+  document.querySelectorAll('[data-sales-application-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedSalesApplicationId = btn.dataset.salesApplicationId;
+      renderSalesTeamContent();
+    });
+  });
+
+  document.querySelectorAll('[data-sales-action]').forEach(btn => {
+    btn.addEventListener('click', () => updateSalesApplicationStatus(btn.dataset.id, btn.dataset.salesAction));
+  });
+
+  const saveNotesBtn = document.getElementById('saveSalesNotesBtn');
+  if(saveNotesBtn){
+    saveNotesBtn.addEventListener('click', () => saveSalesAdminNotes(saveNotesBtn.dataset.id));
+  }
+
+  const assignLeadBtn = document.getElementById('assignLeadBtn');
+  if(assignLeadBtn){
+    assignLeadBtn.addEventListener('click', () => assignSalesLead(assignLeadBtn.dataset.profileId));
+  }
+
+  document.querySelectorAll('[data-request-table]').forEach(btn => {
+    btn.addEventListener('click', () => updateSalesRequestStatus(btn.dataset.requestTable, btn.dataset.requestId, btn.dataset.requestStatus));
+  });
+}
+
+async function updateSalesApplicationStatus(id, status){
+  const appItem = salesApplications.find(item => String(item.id) === String(id));
+  const updates = {
+    status,
+    reviewed_at: new Date().toISOString(),
+    reviewed_by: session.user.email
+  };
+
+  await supabase.from('sales_applications').update(updates).eq('id', id);
+
+  if(appItem?.user_id){
+    await supabase.from('salesman_profiles').upsert({
+      user_id: appItem.user_id,
+      full_name: appItem.full_name,
+      email: appItem.email,
+      phone: appItem.phone,
+      city_state: appItem.city_state,
+      status,
+      commission_rate: 20
+    }, { onConflict: 'user_id' });
+  }
+
+  await renderSalesTeamView();
+}
+
+async function saveSalesAdminNotes(id){
+  await supabase
+    .from('sales_applications')
+    .update({ admin_notes: document.getElementById('salesAdminNotes').value })
+    .eq('id', id);
+  await renderSalesTeamView();
+}
+
+async function assignSalesLead(profileId){
+  if(!profileId){
+    alert('Accept or activate the applicant before assigning leads.');
+    return;
+  }
+
+  await supabase.from('sales_leads').insert({
+    assigned_salesman_id: profileId,
+    business_name: document.getElementById('leadBusinessName').value,
+    contact_name: document.getElementById('leadContactName').value,
+    phone: document.getElementById('leadPhone').value,
+    email: document.getElementById('leadEmail').value,
+    industry: document.getElementById('leadIndustry').value,
+    service_interest: document.getElementById('leadService').value,
+    estimated_value: Number(document.getElementById('leadValue').value || 0),
+    next_follow_up: document.getElementById('leadFollowUp').value || null,
+    admin_notes: document.getElementById('leadNotes').value,
+    status: 'new',
+    created_by_admin: session.user.email
+  });
+
+  await renderSalesTeamView();
+}
+
+async function updateSalesRequestStatus(table, id, status){
+  const payload = {
+    status,
+    completed_at: status === 'completed' ? new Date().toISOString() : null
+  };
+  await supabase.from(table).update(payload).eq('id', id);
+  await renderSalesTeamView();
+}
+
+function salesStatusBadge(status = 'pending_review'){
+  return `<span class="badge badge-${status === 'rejected' || status === 'suspended' ? 'spam' : status === 'active_salesman' ? 'closed' : 'contacted'}">${titleCase(status)}</span>`;
+}
+
+/* =========================
    HELPERS
 ========================= */
 
@@ -2229,7 +2490,6 @@ function serviceOptions(){
     'Consultation',
     'Growth Foundation',
     'Full Scale System',
-    'Social Media Management',
     'Website Development',
     'Static Website + SEO',
     'Dynamic Website with QR & Status Page',
