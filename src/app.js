@@ -36,6 +36,8 @@ let salesLeads = [];
 let salesInvoiceRequests = [];
 let salesQrRequests = [];
 let selectedSalesApplicationId = null;
+let crmClients = [];
+let crmProjects = [];
 
 const DEFAULT_INVOICE_SERVICE = 'Static Website + SEO';
 
@@ -324,27 +326,40 @@ function renderContent(){
 }
 
 
-function renderCrmSenderView(){
-  const clients = [...new Set(requests.map(r => r.business_name).filter(Boolean))].sort((a,b) => a.localeCompare(b));
+async function renderCrmSenderView(){
+  const area = document.getElementById('contentArea');
+  area.innerHTML = '<div class="table-card"><div class="detail-body muted">Loading CRM clients and projects...</div></div>';
 
-  document.getElementById('contentArea').innerHTML = `
+  try{
+    await loadCrmReferenceData();
+  } catch(error){
+    area.innerHTML = `
+      <div class="table-card">
+        <div class="detail-body notice show error">${escapeHtml(error.message || 'Could not load CRM reference data.')}</div>
+      </div>`;
+    return;
+  }
+
+  area.innerHTML = `
     <section class="crm-sender-layout">
       <div class="table-card">
         <div class="table-head">
           <h2>Send work to Client Management</h2>
-          <span class="muted">Creates a pending inbox item on the laptop CRM</span>
+          <span class="muted">Uses synced CRM clients and projects for accurate routing</span>
         </div>
 
         <form class="crm-send-form" id="crmWorkForm">
           <label>Client
-            <input class="input" id="crmClient" list="crmClientOptions" placeholder="Business or client name" required>
-            <datalist id="crmClientOptions">
-              ${clients.map(name => `<option value="${escapeAttr(name)}"></option>`).join('')}
-            </datalist>
+            <select id="crmClient" required>
+              <option value="">Choose synced client</option>
+              ${crmClients.map(client => `<option value="${client.crm_id}" data-name="${escapeAttr(client.business_name || '')}">${escapeHtml(client.business_name || 'Client')}</option>`).join('')}
+            </select>
           </label>
 
           <label>Project
-            <input class="input" id="crmProject" placeholder="Existing project name or Project #">
+            <select id="crmProject">
+              <option value="">Choose client first</option>
+            </select>
           </label>
 
           <label>Task or Ticket
@@ -387,21 +402,60 @@ function renderCrmSenderView(){
 
   const form = document.getElementById('crmWorkForm');
   const clear = document.getElementById('crmClearBtn');
+  const clientSelect = document.getElementById('crmClient');
   form.addEventListener('submit', submitCrmWork);
+  clientSelect.addEventListener('change', updateCrmProjectOptions);
   clear.addEventListener('click', () => {
     form.reset();
     document.getElementById('crmPriority').value = 'Medium';
+    updateCrmProjectOptions();
     showCrmNotice('Form cleared.');
   });
+  updateCrmProjectOptions();
+}
+
+async function loadCrmReferenceData(){
+  const [clientsResult, projectsResult] = await Promise.all([
+    supabase.from('crm_clients').select('*').order('business_name', { ascending:true }),
+    supabase.from('crm_projects').select('*').order('client_name', { ascending:true }).order('title', { ascending:true })
+  ]);
+
+  if(clientsResult.error) throw clientsResult.error;
+  if(projectsResult.error) throw projectsResult.error;
+
+  crmClients = clientsResult.data || [];
+  crmProjects = projectsResult.data || [];
+}
+
+function updateCrmProjectOptions(){
+  const clientSelect = document.getElementById('crmClient');
+  const projectSelect = document.getElementById('crmProject');
+  if(!clientSelect || !projectSelect) return;
+  const clientId = Number(clientSelect.value || 0);
+  const projects = crmProjects.filter(project => Number(project.client_crm_id) === clientId);
+  projectSelect.innerHTML = `<option value="">${clientId ? 'No project / ticket only' : 'Choose client first'}</option>` + projects.map(project => `
+    <option value="${project.crm_id}" data-title="${escapeAttr(project.title || '')}">
+      Project #${project.crm_id} - ${escapeHtml(project.title || 'Project')} ${project.status ? `(${escapeHtml(project.status)})` : ''}
+    </option>
+  `).join('');
 }
 
 async function submitCrmWork(e){
   e.preventDefault();
   const btn = document.getElementById('crmSendBtn');
+  const clientSelect = document.getElementById('crmClient');
+  const projectSelect = document.getElementById('crmProject');
+  const itemType = document.getElementById('crmItemType').value;
+  const clientCrmId = Number(clientSelect.value || 0) || null;
+  const projectCrmId = Number(projectSelect.value || 0) || null;
+  const clientName = clientSelect.selectedOptions[0]?.dataset.name || '';
+  const projectName = projectSelect.selectedOptions[0]?.dataset.title || '';
   const payload = {
-    client_name: document.getElementById('crmClient').value.trim(),
-    project_name: document.getElementById('crmProject').value.trim(),
-    item_type: document.getElementById('crmItemType').value,
+    client_crm_id: clientCrmId,
+    project_crm_id: projectCrmId,
+    client_name: clientName,
+    project_name: projectName,
+    item_type: itemType,
     title: document.getElementById('crmTitle').value.trim(),
     due_date: document.getElementById('crmDueDate').value || null,
     priority: document.getElementById('crmPriority').value,
@@ -409,8 +463,13 @@ async function submitCrmWork(e){
     source: 'reimage_admin_portal'
   };
 
-  if(!payload.client_name || !payload.title){
+  if(!payload.client_crm_id || !payload.client_name || !payload.title){
     showCrmNotice('Client and title are required.', true);
+    return;
+  }
+
+  if(payload.item_type === 'task' && !payload.project_crm_id){
+    showCrmNotice('Tasks must be tied to a synced project. Use Ticket if there is no project.', true);
     return;
   }
 
@@ -427,6 +486,7 @@ async function submitCrmWork(e){
 
   e.target.reset();
   document.getElementById('crmPriority').value = 'Medium';
+  updateCrmProjectOptions();
   showCrmNotice('Sent. Open Website Inbox in Client Management and sync it.');
 }
 
