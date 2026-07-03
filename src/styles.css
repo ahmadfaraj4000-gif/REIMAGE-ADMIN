@@ -1822,3 +1822,7 @@ tr:hover,tr.active,.sales-row:hover,.sales-row.active,.message-thread-row:hover,
     overflow-x: auto !important;
   }
 }
+
+
+.crm-sender-layout{display:grid;grid-template-columns:minmax(0,920px);gap:1.2rem}.crm-send-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;padding:1.35rem}.crm-send-form label{margin:0}.crm-send-form .wide{grid-column:1 / -1}.crm-send-actions{display:flex;gap:.75rem;flex-wrap:wrap;align-items:center}
+@media(max-width:760px){.crm-send-form{grid-template-columns:1fr}.crm-sender-layout{grid-template-columns:1fr}}

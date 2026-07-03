@@ -142,11 +142,12 @@ async function renderAdmin(){
           <button class="tab ${activeView === 'calendar' ? 'active' : ''}" data-view="calendar">Calendar View</button>
           <button class="tab ${activeView === 'messages' ? 'active' : ''}" data-view="messages">Messages</button>
           <button class="tab ${activeView === 'sales' ? 'active' : ''}" data-view="sales">Sales Team</button>
+          <button class="tab ${activeView === 'crm' ? 'active' : ''}" data-view="crm">CRM Sender</button>
           <button class="tab ${activeView === 'invoice' ? 'active' : ''}" data-view="invoice">Invoices</button>
           <button class="tab ${activeView === 'qr' ? 'active' : ''}" data-view="qr">QR Codes</button>
         </div>
 
-        ${['invoice','qr','sales'].includes(activeView) ? '' : `
+        ${['invoice','qr','sales','crm'].includes(activeView) ? '' : `
           <div class="toolbar">
             <input class="input" id="searchInput" placeholder="Search name, email, business, message..." value="${escapeAttr(filters.search)}">
             <select id="serviceFilter"></select>
@@ -191,6 +192,8 @@ function bindTopEvents(){
       renderQrView();
     } else if(activeView === 'sales'){
       renderSalesTeamView();
+    } else if(activeView === 'crm'){
+      renderCrmSenderView();
     } else {
       loadRequests();
     }
@@ -313,9 +316,125 @@ function renderContent(){
     renderInvoiceView();
   } else if(activeView === 'qr'){
     renderQrView();
+  } else if(activeView === 'crm'){
+    renderCrmSenderView();
   } else {
     renderListView();
   }
+}
+
+
+function renderCrmSenderView(){
+  const clients = [...new Set(requests.map(r => r.business_name).filter(Boolean))].sort((a,b) => a.localeCompare(b));
+
+  document.getElementById('contentArea').innerHTML = `
+    <section class="crm-sender-layout">
+      <div class="table-card">
+        <div class="table-head">
+          <h2>Send work to Client Management</h2>
+          <span class="muted">Creates a pending inbox item on the laptop CRM</span>
+        </div>
+
+        <form class="crm-send-form" id="crmWorkForm">
+          <label>Client
+            <input class="input" id="crmClient" list="crmClientOptions" placeholder="Business or client name" required>
+            <datalist id="crmClientOptions">
+              ${clients.map(name => `<option value="${escapeAttr(name)}"></option>`).join('')}
+            </datalist>
+          </label>
+
+          <label>Project
+            <input class="input" id="crmProject" placeholder="Existing project name or Project #">
+          </label>
+
+          <label>Task or Ticket
+            <select id="crmItemType">
+              <option value="task">Task</option>
+              <option value="ticket">Ticket</option>
+            </select>
+          </label>
+
+          <label class="wide">Title
+            <input class="input" id="crmTitle" placeholder="What needs to be done" required>
+          </label>
+
+          <label>Due Date
+            <input class="input" id="crmDueDate" type="date">
+          </label>
+
+          <label>Priority
+            <select id="crmPriority">
+              <option>Medium</option>
+              <option>Low</option>
+              <option>High</option>
+              <option>Urgent</option>
+            </select>
+          </label>
+
+          <label class="wide">Notes
+            <textarea id="crmNotes" placeholder="Extra context, links, request details, or follow-up notes"></textarea>
+          </label>
+
+          <div class="crm-send-actions wide">
+            <button class="btn btn-primary" type="submit" id="crmSendBtn">Send to CRM</button>
+            <button class="btn btn-light" type="button" id="crmClearBtn">Clear</button>
+          </div>
+
+          <div class="notice" id="crmNotice"></div>
+        </form>
+      </div>
+    </section>`;
+
+  const form = document.getElementById('crmWorkForm');
+  const clear = document.getElementById('crmClearBtn');
+  form.addEventListener('submit', submitCrmWork);
+  clear.addEventListener('click', () => {
+    form.reset();
+    document.getElementById('crmPriority').value = 'Medium';
+    showCrmNotice('Form cleared.');
+  });
+}
+
+async function submitCrmWork(e){
+  e.preventDefault();
+  const btn = document.getElementById('crmSendBtn');
+  const payload = {
+    client_name: document.getElementById('crmClient').value.trim(),
+    project_name: document.getElementById('crmProject').value.trim(),
+    item_type: document.getElementById('crmItemType').value,
+    title: document.getElementById('crmTitle').value.trim(),
+    due_date: document.getElementById('crmDueDate').value || null,
+    priority: document.getElementById('crmPriority').value,
+    notes: document.getElementById('crmNotes').value.trim(),
+    source: 'reimage_admin_portal'
+  };
+
+  if(!payload.client_name || !payload.title){
+    showCrmNotice('Client and title are required.', true);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  const { error } = await supabase.from('crm_remote_inbox').insert([payload]);
+  btn.disabled = false;
+  btn.textContent = 'Send to CRM';
+
+  if(error){
+    showCrmNotice(error.message, true);
+    return;
+  }
+
+  e.target.reset();
+  document.getElementById('crmPriority').value = 'Medium';
+  showCrmNotice('Sent. Open Website Inbox in Client Management and sync it.');
+}
+
+function showCrmNotice(message, isError = false){
+  const notice = document.getElementById('crmNotice');
+  if(!notice) return;
+  notice.textContent = message;
+  notice.className = `notice show${isError ? ' error' : ''}`;
 }
 
 function filteredRequests(){
