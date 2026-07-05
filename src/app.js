@@ -38,6 +38,7 @@ let salesQrRequests = [];
 let selectedSalesApplicationId = null;
 let crmClients = [];
 let crmProjects = [];
+let crmPotentialLeads = [];
 
 const DEFAULT_INVOICE_SERVICE = 'Static Website + SEO';
 
@@ -328,7 +329,7 @@ function renderContent(){
 
 async function renderCrmSenderView(){
   const area = document.getElementById('contentArea');
-  area.innerHTML = '<div class="table-card"><div class="detail-body muted">Loading CRM clients and projects...</div></div>';
+  area.innerHTML = '<div class="table-card"><div class="detail-body muted">Loading CRM clients, projects, and potential leads...</div></div>';
 
   try{
     await loadCrmReferenceData();
@@ -342,6 +343,46 @@ async function renderCrmSenderView(){
 
   area.innerHTML = `
     <section class="crm-sender-layout">
+      <div class="table-card">
+        <div class="table-head">
+          <h2>Send new lead to Client Management</h2>
+          <span class="muted">Lands in the CRM Potential Leads tab first</span>
+        </div>
+
+        <form class="crm-send-form" id="crmLeadForm">
+          <label>Lead Name
+            <input class="input" id="leadName" placeholder="Person's name" required>
+          </label>
+
+          <label>Company
+            <input class="input" id="leadCompany" placeholder="Business or organization">
+          </label>
+
+          <label>Phone
+            <input class="input" id="leadPhone" type="tel" placeholder="Phone number">
+          </label>
+
+          <label>Email
+            <input class="input" id="leadEmail" type="email" placeholder="Email address">
+          </label>
+
+          <label class="wide">Potential Project
+            <textarea id="leadProject" placeholder="Website, marketing, CRM, automation, maintenance, or other project details" required></textarea>
+          </label>
+
+          <label class="wide">Notes
+            <textarea id="leadNotes" placeholder="Budget, timeline, source, next step, or extra context"></textarea>
+          </label>
+
+          <div class="crm-send-actions wide">
+            <button class="btn btn-primary" type="submit" id="crmLeadSendBtn">Send Lead to CRM</button>
+            <button class="btn btn-light" type="button" id="crmLeadClearBtn">Clear</button>
+          </div>
+
+          <div class="notice" id="crmLeadNotice"></div>
+        </form>
+      </div>
+
       <div class="table-card">
         <div class="table-head">
           <h2>Send work to Client Management</h2>
@@ -398,12 +439,49 @@ async function renderCrmSenderView(){
           <div class="notice" id="crmNotice"></div>
         </form>
       </div>
+
+      <div class="table-card">
+        <div class="table-head">
+          <h2>Recent potential leads</h2>
+          <span class="muted">${crmPotentialLeads.length} synced</span>
+        </div>
+
+        <div class="table-wrap crm-leads-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Created</th>
+                <th>Lead</th>
+                <th>Company</th>
+                <th>Phone</th>
+                <th>Project</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${crmPotentialLeads.map(lead => `
+                <tr>
+                  <td>${formatDateTime(lead.created_at)}</td>
+                  <td><strong>${escapeHtml(lead.lead_name || '')}</strong><br><span class="muted">${escapeHtml(lead.email || '')}</span></td>
+                  <td>${escapeHtml(lead.company || '')}</td>
+                  <td>${escapeHtml(lead.phone || '')}</td>
+                  <td>${escapeHtml(lead.potential_project || '')}</td>
+                  <td>${escapeHtml(lead.status || 'pending')}</td>
+                </tr>
+              `).join('') || `<tr><td colspan="6" class="muted">No potential leads sent yet.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>`;
 
   const form = document.getElementById('crmWorkForm');
+  const leadForm = document.getElementById('crmLeadForm');
   const clear = document.getElementById('crmClearBtn');
+  const leadClear = document.getElementById('crmLeadClearBtn');
   const clientSelect = document.getElementById('crmClient');
   form.addEventListener('submit', submitCrmWork);
+  leadForm.addEventListener('submit', submitCrmLead);
   clientSelect.addEventListener('change', updateCrmProjectOptions);
   clear.addEventListener('click', () => {
     form.reset();
@@ -411,20 +489,27 @@ async function renderCrmSenderView(){
     updateCrmProjectOptions();
     showCrmNotice('Form cleared.');
   });
+  leadClear.addEventListener('click', () => {
+    leadForm.reset();
+    showCrmLeadNotice('Lead form cleared.');
+  });
   updateCrmProjectOptions();
 }
 
 async function loadCrmReferenceData(){
-  const [clientsResult, projectsResult] = await Promise.all([
+  const [clientsResult, projectsResult, leadsResult] = await Promise.all([
     supabase.from('crm_clients').select('*').order('business_name', { ascending:true }),
-    supabase.from('crm_projects').select('*').order('client_name', { ascending:true }).order('title', { ascending:true })
+    supabase.from('crm_projects').select('*').order('client_name', { ascending:true }).order('title', { ascending:true }),
+    supabase.from('crm_potential_leads').select('*').order('created_at', { ascending:false }).limit(20)
   ]);
 
   if(clientsResult.error) throw clientsResult.error;
   if(projectsResult.error) throw projectsResult.error;
+  if(leadsResult.error) console.warn('Potential leads load failed:', leadsResult.error);
 
   crmClients = clientsResult.data || [];
   crmProjects = projectsResult.data || [];
+  crmPotentialLeads = leadsResult.error ? [] : (leadsResult.data || []);
 }
 
 function updateCrmProjectOptions(){
@@ -490,8 +575,49 @@ async function submitCrmWork(e){
   showCrmNotice('Sent. Open Website Inbox in Client Management and sync it.');
 }
 
+async function submitCrmLead(e){
+  e.preventDefault();
+  const btn = document.getElementById('crmLeadSendBtn');
+  const payload = {
+    lead_name: document.getElementById('leadName').value.trim(),
+    company: document.getElementById('leadCompany').value.trim(),
+    phone: document.getElementById('leadPhone').value.trim(),
+    email: document.getElementById('leadEmail').value.trim(),
+    potential_project: document.getElementById('leadProject').value.trim(),
+    notes: document.getElementById('leadNotes').value.trim(),
+    source: 'reimage_admin_portal'
+  };
+
+  if(!payload.lead_name || !payload.potential_project){
+    showCrmLeadNotice('Lead name and potential project are required.', true);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  const { error } = await supabase.from('crm_potential_leads').insert([payload]);
+  btn.disabled = false;
+  btn.textContent = 'Send Lead to CRM';
+
+  if(error){
+    showCrmLeadNotice(error.message, true);
+    return;
+  }
+
+  e.target.reset();
+  await renderCrmSenderView();
+  showCrmLeadNotice('Lead sent. It will appear under Potential Leads in Client Management.');
+}
+
 function showCrmNotice(message, isError = false){
   const notice = document.getElementById('crmNotice');
+  if(!notice) return;
+  notice.textContent = message;
+  notice.className = `notice show${isError ? ' error' : ''}`;
+}
+
+function showCrmLeadNotice(message, isError = false){
+  const notice = document.getElementById('crmLeadNotice');
   if(!notice) return;
   notice.textContent = message;
   notice.className = `notice show${isError ? ' error' : ''}`;
