@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const QR_REDIRECT_BASE_URL = (import.meta.env.VITE_QR_REDIRECT_BASE_URL || `${SUPABASE_URL}/functions/v1/qr-redirect`).replace(/\/+$/,'');
+const ADMIN_EMAILS = ['reimagbs@gmail.com', 'reimagebs@gmail.com'];
 
 const app = document.getElementById('app');
 
@@ -35,6 +36,7 @@ let salesmanProfiles = [];
 let salesLeads = [];
 let salesInvoiceRequests = [];
 let salesQrRequests = [];
+let salesExamAttempts = [];
 let selectedSalesApplicationId = null;
 let crmClients = [];
 let crmProjects = [];
@@ -84,11 +86,11 @@ function renderLogin(){
         <img class="login-logo" src="/logo.png" alt="RE IMAGE logo" onerror="this.style.display='none'">
         <div class="kicker">Admin Portal</div>
         <h1>RE IMAGE Dashboard</h1>
-        <p class="muted">Log in with your Supabase Auth admin account.</p>
+          <p class="muted">Log in with your Supabase Auth admin account.</p>
 
         <div class="form-group">
           <label>Email</label>
-          <input class="input" id="email" type="email" required placeholder="reimagbs@gmail.com">
+          <input class="input" id="email" type="email" required placeholder="reimagebs@gmail.com">
         </div>
 
         <div class="form-group">
@@ -2675,7 +2677,7 @@ function invoicePreviewHtml(totals){
           <p>Marketing • Websites • Branding • Automation</p>
           <p>Connecticut, USA</p>
           <p>+1 (860) 718-5928</p>
-          <p>reimagbs@gmail.com</p>
+          <p>reimagebs@gmail.com</p>
         </div>
 
         <div>
@@ -2787,15 +2789,16 @@ async function renderSalesTeamView(){
   const area = document.getElementById('contentArea');
   area.innerHTML = '<div class="table-card"><div class="detail-body muted">Loading sales team data...</div></div>';
 
-  const [apps, profiles, leads, invoices, qrs] = await Promise.all([
+  const [apps, profiles, leads, invoices, qrs, examAttempts] = await Promise.all([
     supabase.from('sales_applications').select('*').order('submitted_at', { ascending:false }),
     supabase.from('salesman_profiles').select('*').order('created_at', { ascending:false }),
     supabase.from('sales_leads').select('*').order('updated_at', { ascending:false }),
     supabase.from('invoice_requests').select('*').order('created_at', { ascending:false }),
-    supabase.from('qr_code_requests').select('*').order('created_at', { ascending:false })
+    supabase.from('qr_code_requests').select('*').order('created_at', { ascending:false }),
+    supabase.from('sales_exam_attempts').select('*').order('started_at', { ascending:false })
   ]);
 
-  const firstError = [apps, profiles, leads, invoices, qrs].find(result => result.error)?.error;
+  const firstError = [apps, profiles, leads, invoices, qrs, examAttempts].find(result => result.error)?.error;
   if(firstError){
     area.innerHTML = `
       <div class="table-card">
@@ -2810,6 +2813,7 @@ async function renderSalesTeamView(){
   salesLeads = leads.data || [];
   salesInvoiceRequests = invoices.data || [];
   salesQrRequests = qrs.data || [];
+  salesExamAttempts = examAttempts.data || [];
 
   if(!selectedSalesApplicationId && salesApplications.length){
     selectedSalesApplicationId = salesApplications[0].id;
@@ -2823,8 +2827,15 @@ function renderSalesTeamContent(){
   const selected = salesApplications.find(appItem => appItem.id === selectedSalesApplicationId) || salesApplications[0] || null;
   const activeProfiles = salesmanProfiles.filter(profile => ['active_salesman','testing','onboarding','accepted'].includes(profile.status));
   const pendingRequests = [...salesInvoiceRequests, ...salesQrRequests].filter(request => !['completed','closed'].includes(request.status || 'pending'));
+  const sessionEmail = String(session?.user?.email || '').toLowerCase();
+  const adminEmailWarning = ADMIN_EMAILS.includes(sessionEmail) ? '' : `
+    <div class="admin-warning">
+      <strong>Sales data may be hidden by Supabase RLS.</strong>
+      <span>You are signed in as ${escapeHtml(session?.user?.email || 'unknown')}. The sales admin policies currently allow ${ADMIN_EMAILS.map(escapeHtml).join(' or ')}.</span>
+    </div>`;
 
   area.innerHTML = `
+    ${adminEmailWarning}
     <div class="sales-admin-grid">
       <section class="table-card">
         <div class="table-head">
@@ -2893,13 +2904,25 @@ function salesApplicationRow(appItem, selected){
 function salesApplicationDetail(appItem){
   const profile = salesmanProfiles.find(profileItem => profileItem.user_id === appItem.user_id);
   const assigned = profile ? salesLeads.filter(lead => lead.assigned_salesman_id === profile.id) : [];
+  const examAttempt = salesExamAttempts.find(attempt => attempt.user_id === appItem.user_id);
+  const examExpiredInProgress = examAttempt?.status === 'in_progress' && examAttempt?.expires_at && new Date(examAttempt.expires_at).getTime() <= Date.now();
+  const examNeedsReset = examAttempt && !examAttempt.passed && (['submitted','timed_out'].includes(examAttempt.status) || examExpiredInProgress);
 
   return `
     <div class="detail-grid">
       <div class="info-box"><span>Email</span><strong>${escapeHtml(appItem.email || '—')}</strong></div>
       <div class="info-box"><span>Phone</span><strong>${escapeHtml(appItem.phone || '—')}</strong></div>
       <div class="info-box"><span>City / State</span><strong>${escapeHtml(appItem.city_state || '—')}</strong></div>
-      <div class="info-box"><span>Test Score</span><strong>${appItem.test_score ? `${escapeHtml(appItem.test_score)}%` : '—'}</strong></div>
+      <div class="info-box"><span>Test Score</span><strong>${examAttempt?.score ? `${escapeHtml(examAttempt.score)}%` : appItem.test_score ? `${escapeHtml(appItem.test_score)}%` : '—'}</strong></div>
+    </div>
+
+    <div class="message-box">
+      <strong>Exam Attempt</strong><br>
+      Status: ${titleCase(examAttempt?.status || 'not_started')}<br>
+      Started: ${examAttempt?.started_at ? formatDateTime(examAttempt.started_at) : '—'}<br>
+      Expires: ${examAttempt?.expires_at ? formatDateTime(examAttempt.expires_at) : '—'}<br>
+      Passed: ${examAttempt?.passed ? 'Yes' : 'No'}
+      ${examNeedsReset ? '<div class="action-row"><button class="btn btn-primary" data-reinstate-exam="' + escapeAttr(appItem.user_id || '') + '">Reinstate Exam</button></div>' : ''}
     </div>
 
     <div class="message-box"><strong>Sales Experience</strong><br>${escapeHtml(appItem.sales_experience || '—')}</div>
@@ -2974,9 +2997,38 @@ function bindSalesTeamEvents(){
     assignLeadBtn.addEventListener('click', () => assignSalesLead(assignLeadBtn.dataset.profileId));
   }
 
+  document.querySelectorAll('[data-reinstate-exam]').forEach(btn => {
+    btn.addEventListener('click', () => reinstateSalesExam(btn.dataset.reinstateExam));
+  });
+
   document.querySelectorAll('[data-request-table]').forEach(btn => {
     btn.addEventListener('click', () => updateSalesRequestStatus(btn.dataset.requestTable, btn.dataset.requestId, btn.dataset.requestStatus));
   });
+}
+
+async function reinstateSalesExam(userId){
+  if(!userId){
+    alert('This applicant does not have a linked portal user yet.');
+    return;
+  }
+
+  const { error } = await supabase
+    .from('sales_exam_attempts')
+    .update({
+      status: 'admin_reset',
+      locked_reason: null,
+      reset_by: session.user.email,
+      reset_at: new Date().toISOString()
+    })
+    .eq('user_id', userId)
+    .in('status', ['submitted','timed_out','in_progress']);
+
+  if(error){
+    alert(error.message);
+    return;
+  }
+
+  await renderSalesTeamView();
 }
 
 async function updateSalesApplicationStatus(id, status){
