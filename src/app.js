@@ -39,6 +39,7 @@ let selectedSalesApplicationId = null;
 let crmClients = [];
 let crmProjects = [];
 let crmPotentialLeads = [];
+let videoSubmissions = [];
 
 const DEFAULT_INVOICE_SERVICE = 'Static Website + SEO';
 
@@ -146,11 +147,12 @@ async function renderAdmin(){
           <button class="tab ${activeView === 'messages' ? 'active' : ''}" data-view="messages">Messages</button>
           <button class="tab ${activeView === 'sales' ? 'active' : ''}" data-view="sales">Sales Team</button>
           <button class="tab ${activeView === 'crm' ? 'active' : ''}" data-view="crm">CRM Sender</button>
+          <button class="tab ${activeView === 'video' ? 'active' : ''}" data-view="video">Video Send</button>
           <button class="tab ${activeView === 'invoice' ? 'active' : ''}" data-view="invoice">Invoices</button>
           <button class="tab ${activeView === 'qr' ? 'active' : ''}" data-view="qr">QR Codes</button>
         </div>
 
-        ${['invoice','qr','sales','crm'].includes(activeView) ? '' : `
+        ${['invoice','qr','sales','crm','video'].includes(activeView) ? '' : `
           <div class="toolbar">
             <input class="input" id="searchInput" placeholder="Search name, email, business, message..." value="${escapeAttr(filters.search)}">
             <select id="serviceFilter"></select>
@@ -183,6 +185,12 @@ async function renderAdmin(){
     return;
   }
 
+  if(activeView === 'video'){
+    renderStats();
+    await renderVideoSendView();
+    return;
+  }
+
   await loadRequests();
 }
 
@@ -197,6 +205,8 @@ function bindTopEvents(){
       renderSalesTeamView();
     } else if(activeView === 'crm'){
       renderCrmSenderView();
+    } else if(activeView === 'video'){
+      renderVideoSendView();
     } else {
       loadRequests();
     }
@@ -321,9 +331,263 @@ function renderContent(){
     renderQrView();
   } else if(activeView === 'crm'){
     renderCrmSenderView();
+  } else if(activeView === 'video'){
+    renderVideoSendView();
   } else {
     renderListView();
   }
+}
+
+async function renderVideoSendView(){
+  const area = document.getElementById('contentArea');
+  area.innerHTML = '<div class="table-card"><div class="detail-body muted">Loading synced clients and recent video submissions...</div></div>';
+
+  try{
+    await loadVideoReferenceData();
+  } catch(error){
+    area.innerHTML = `
+      <div class="table-card">
+        <div class="detail-body notice show error">${escapeHtml(error.message || 'Could not load video sender data.')}</div>
+      </div>`;
+    return;
+  }
+
+  area.innerHTML = `
+    <section class="video-sender-layout">
+      <div class="table-card">
+        <div class="table-head">
+          <h2>Send videos to Video Manager</h2>
+          <span class="muted">Editor pulls these from the Python app on his laptop</span>
+        </div>
+
+        <form class="video-send-form" id="videoSendForm">
+          <label>Client
+            <select id="videoClient" required>
+              <option value="">Choose synced client</option>
+              ${crmClients.map(client => `<option value="${client.crm_id}" data-name="${escapeAttr(client.business_name || '')}">${escapeHtml(client.business_name || 'Client')}</option>`).join('')}
+            </select>
+          </label>
+
+          <label>Due Date
+            <input class="input" id="videoDueDate" type="date" value="${escapeAttr(defaultVideoDueDate())}" readonly>
+          </label>
+
+          <label class="wide">Videos
+            <input class="input" id="videoFiles" type="file" accept="video/*" multiple required>
+          </label>
+
+          <label class="wide">Notes for Editor
+            <textarea id="videoNotes" placeholder="Explain the idea, edit direction, priorities, export needs, reference links, or anything your editor needs."></textarea>
+          </label>
+
+          <div class="video-selected wide" id="videoSelectedFiles">
+            <span class="muted">No videos selected yet.</span>
+          </div>
+
+          <div class="crm-send-actions wide">
+            <button class="btn btn-primary" type="submit" id="videoSendBtn">Send to Video Manager</button>
+            <button class="btn btn-light" type="button" id="videoClearBtn">Clear</button>
+          </div>
+
+          <div class="notice" id="videoNotice"></div>
+        </form>
+      </div>
+
+      <div class="table-card">
+        <div class="table-head">
+          <h2>Recent video sends</h2>
+          <span class="muted">${videoSubmissions.length} synced</span>
+        </div>
+
+        <div class="table-wrap video-submissions-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Created</th>
+                <th>Client</th>
+                <th>Due</th>
+                <th>Files</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${videoSubmissions.map(item => `
+                <tr>
+                  <td>${formatDateTime(item.created_at)}</td>
+                  <td><strong>${escapeHtml(item.client_name || 'Client')}</strong><br><span class="muted">${escapeHtml(item.submitted_by_email || '')}</span></td>
+                  <td>${escapeHtml(item.due_date || '—')}</td>
+                  <td>${Array.isArray(item.files) ? item.files.length : 0}</td>
+                  <td>${escapeHtml(titleCase(item.status || 'new'))}</td>
+                </tr>
+              `).join('') || `<tr><td colspan="5" class="muted">No videos sent yet.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>`;
+
+  const form = document.getElementById('videoSendForm');
+  const fileInput = document.getElementById('videoFiles');
+  const clear = document.getElementById('videoClearBtn');
+  form.addEventListener('submit', submitVideoSend);
+  fileInput.addEventListener('change', renderSelectedVideoFiles);
+  clear.addEventListener('click', () => {
+    form.reset();
+    renderSelectedVideoFiles();
+    showVideoNotice('Form cleared.');
+  });
+  renderSelectedVideoFiles();
+}
+
+async function loadVideoReferenceData(){
+  const [clientsResult, submissionsResult] = await Promise.all([
+    supabase.from('crm_clients').select('*').order('business_name', { ascending:true }),
+    supabase.from('video_submissions').select('*').order('created_at', { ascending:false }).limit(20)
+  ]);
+
+  if(clientsResult.error) throw clientsResult.error;
+  if(submissionsResult.error) throw submissionsResult.error;
+
+  crmClients = clientsResult.data || [];
+  videoSubmissions = submissionsResult.data || [];
+}
+
+function renderSelectedVideoFiles(){
+  const target = document.getElementById('videoSelectedFiles');
+  const input = document.getElementById('videoFiles');
+  if(!target || !input) return;
+  const files = Array.from(input.files || []);
+  target.innerHTML = files.length ? files.map(file => `
+    <div class="video-file-pill">
+      <strong>${escapeHtml(file.name)}</strong>
+      <span>${formatBytes(file.size)} · ${escapeHtml(file.type || 'video file')}</span>
+    </div>
+  `).join('') : '<span class="muted">No videos selected yet.</span>';
+}
+
+async function submitVideoSend(e){
+  e.preventDefault();
+  const btn = document.getElementById('videoSendBtn');
+  const clientSelect = document.getElementById('videoClient');
+  const fileInput = document.getElementById('videoFiles');
+  const clientCrmId = Number(clientSelect.value || 0) || null;
+  const clientName = clientSelect.selectedOptions[0]?.dataset.name || '';
+  const files = Array.from(fileInput.files || []);
+  const sentDate = todayIso();
+  const dueDate = defaultVideoDueDate(sentDate);
+  const clientSlug = slugFilePart(clientName || 'client');
+
+  if(!clientCrmId || !clientName){
+    showVideoNotice('Choose a synced client first.', true);
+    return;
+  }
+
+  if(!files.length){
+    showVideoNotice('Choose at least one video file.', true);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Uploading...';
+
+  const submissionId = crypto.randomUUID();
+  const uploaded = [];
+
+  for(const [index, file] of files.entries()){
+    const displayName = videoFileName(clientSlug, sentDate, index + 1, file.name);
+    const path = `${clientCrmId}/${submissionId}/${displayName}`;
+    showVideoNotice(`Uploading ${index + 1} of ${files.length}: ${displayName}`);
+
+    const { data, error } = await supabase.storage
+      .from('video-submissions')
+      .upload(path, file, {
+        cacheControl: '3600',
+        contentType: file.type || 'video/mp4',
+        upsert: false
+      });
+
+    if(error){
+      btn.disabled = false;
+      btn.textContent = 'Send to Video Manager';
+      showVideoNotice(error.message, true);
+      return;
+    }
+
+    uploaded.push({
+      name: displayName,
+      original_name: file.name,
+      size: file.size,
+      type: file.type,
+      storage_path: data.path,
+      uploaded_at: new Date().toISOString()
+    });
+  }
+
+  showVideoNotice('Saving video job for editor...');
+  const { error } = await supabase.from('video_submissions').insert([{
+    client_crm_id: clientCrmId,
+    client_name: clientName,
+    notes: document.getElementById('videoNotes').value.trim(),
+    due_date: dueDate,
+    status: 'new',
+    files: uploaded,
+    submitted_by: session.user.id,
+    submitted_by_email: session.user.email
+  }]);
+
+  btn.disabled = false;
+  btn.textContent = 'Send to Video Manager';
+
+  if(error){
+    showVideoNotice(error.message, true);
+    return;
+  }
+
+  e.target.reset();
+  renderSelectedVideoFiles();
+  await renderVideoSendView();
+  showVideoNotice('Sent to Video Manager. Your editor can sync it from the Python app.');
+}
+
+function showVideoNotice(message, isError = false){
+  const notice = document.getElementById('videoNotice');
+  if(!notice) return;
+  notice.textContent = message;
+  notice.className = `notice show${isError ? ' error' : ''}`;
+}
+
+function todayIso(){
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addDaysIso(iso, days){
+  const [year, month, day] = String(iso).split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function defaultVideoDueDate(baseIso = todayIso()){
+  return addDaysIso(baseIso, 5);
+}
+
+function slugFilePart(value){
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'client';
+}
+
+function fileExtension(name){
+  const match = String(name || '').match(/\.([a-zA-Z0-9]{1,12})$/);
+  return match ? `.${match[1].toLowerCase()}` : '';
+}
+
+function videoFileName(clientSlug, sentDate, index, originalName){
+  const ext = fileExtension(originalName) || '.mp4';
+  return `${clientSlug}-${sentDate}-video-${String(index).padStart(2, '0')}${ext}`;
 }
 
 
@@ -2856,6 +3120,14 @@ function formatDateTime(value){
         minute:'2-digit'
       })
     : '—';
+}
+
+function formatBytes(bytes){
+  const size = Number(bytes || 0);
+  if(size < 1024) return `${size} B`;
+  if(size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  if(size < 1024 * 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
+  return `${(size / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
 function fullName(r){

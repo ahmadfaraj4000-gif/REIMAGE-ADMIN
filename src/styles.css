@@ -1826,3 +1826,15 @@ tr:hover,tr.active,.sales-row:hover,.sales-row.active,.message-thread-row:hover,
 
 .crm-sender-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:1.2rem}.crm-send-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;padding:1.35rem}.crm-send-form label{margin:0}.crm-send-form .wide{grid-column:1 / -1}.crm-send-actions{display:flex;gap:.75rem;flex-wrap:wrap;align-items:center}.crm-leads-table table{min-width:980px}
 @media(max-width:760px){.crm-send-form{grid-template-columns:1fr}.crm-sender-layout{grid-template-columns:1fr}}
+
+.video-sender-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:1.2rem}
+.video-send-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;padding:1.35rem}
+.video-send-form label{margin:0}
+.video-send-form .wide{grid-column:1 / -1}
+.video-selected{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.75rem;padding:.85rem;border:1px solid var(--portal-line);border-radius:16px;background:rgba(255,255,255,.58)}
+.video-file-pill{padding:.8rem;border:1px solid rgba(26,122,138,.13);border-radius:14px;background:#fff}
+.video-file-pill strong,.video-file-pill span{display:block;min-width:0;overflow-wrap:anywhere}
+.video-file-pill strong{color:var(--portal-ink);font-size:.95rem}
+.video-file-pill span{color:var(--portal-muted);font-size:.84rem;margin-top:.25rem}
+.video-submissions-table table{min-width:860px}
+@media(max-width:760px){.video-send-form{grid-template-columns:1fr}.video-sender-layout{grid-template-columns:1fr}}
