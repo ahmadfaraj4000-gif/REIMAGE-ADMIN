@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const QR_REDIRECT_BASE_URL = (import.meta.env.VITE_QR_REDIRECT_BASE_URL || `${SUPABASE_URL}/functions/v1/qr-redirect`).replace(/\/+$/,'');
+const ADMIN_EMAILS = ['reimagbs@gmail.com', 'reimagebs@gmail.com'];
 
 const app = document.getElementById('app');
 
@@ -35,9 +36,13 @@ let salesmanProfiles = [];
 let salesLeads = [];
 let salesInvoiceRequests = [];
 let salesQrRequests = [];
+let salesExamAttempts = [];
 let selectedSalesApplicationId = null;
 let crmClients = [];
 let crmProjects = [];
+let crmPotentialLeads = [];
+let crmAppointments = [];
+let videoSubmissions = [];
 
 const DEFAULT_INVOICE_SERVICE = 'Static Website + SEO';
 
@@ -82,11 +87,11 @@ function renderLogin(){
         <img class="login-logo" src="/logo.png" alt="RE IMAGE logo" onerror="this.style.display='none'">
         <div class="kicker">Admin Portal</div>
         <h1>RE IMAGE Dashboard</h1>
-        <p class="muted">Log in with your Supabase Auth admin account.</p>
+          <p class="muted">Log in with your Supabase Auth admin account.</p>
 
         <div class="form-group">
           <label>Email</label>
-          <input class="input" id="email" type="email" required placeholder="reimagbs@gmail.com">
+          <input class="input" id="email" type="email" required placeholder="reimagebs@gmail.com">
         </div>
 
         <div class="form-group">
@@ -145,11 +150,12 @@ async function renderAdmin(){
           <button class="tab ${activeView === 'messages' ? 'active' : ''}" data-view="messages">Messages</button>
           <button class="tab ${activeView === 'sales' ? 'active' : ''}" data-view="sales">Sales Team</button>
           <button class="tab ${activeView === 'crm' ? 'active' : ''}" data-view="crm">CRM Sender</button>
+          <button class="tab ${activeView === 'video' ? 'active' : ''}" data-view="video">Video Send</button>
           <button class="tab ${activeView === 'invoice' ? 'active' : ''}" data-view="invoice">Invoices</button>
           <button class="tab ${activeView === 'qr' ? 'active' : ''}" data-view="qr">QR Codes</button>
         </div>
 
-        ${['invoice','qr','sales','crm'].includes(activeView) ? '' : `
+        ${['invoice','qr','sales','crm','video'].includes(activeView) ? '' : `
           <div class="toolbar">
             <input class="input" id="searchInput" placeholder="Search name, email, business, message..." value="${escapeAttr(filters.search)}">
             <select id="serviceFilter"></select>
@@ -182,6 +188,12 @@ async function renderAdmin(){
     return;
   }
 
+  if(activeView === 'video'){
+    renderStats();
+    await renderVideoSendView();
+    return;
+  }
+
   await loadRequests();
 }
 
@@ -196,6 +208,8 @@ function bindTopEvents(){
       renderSalesTeamView();
     } else if(activeView === 'crm'){
       renderCrmSenderView();
+    } else if(activeView === 'video'){
+      renderVideoSendView();
     } else {
       loadRequests();
     }
@@ -320,15 +334,274 @@ function renderContent(){
     renderQrView();
   } else if(activeView === 'crm'){
     renderCrmSenderView();
+  } else if(activeView === 'video'){
+    renderVideoSendView();
   } else {
     renderListView();
   }
 }
 
+async function renderVideoSendView(){
+  const area = document.getElementById('contentArea');
+  area.innerHTML = '<div class="table-card"><div class="detail-body muted">Loading synced clients and recent video submissions...</div></div>';
+
+  try{
+    await loadVideoReferenceData();
+  } catch(error){
+    area.innerHTML = `
+      <div class="table-card">
+        <div class="detail-body notice show error">${escapeHtml(error.message || 'Could not load video sender data.')}</div>
+      </div>`;
+    return;
+  }
+
+  area.innerHTML = `
+    <section class="video-sender-layout">
+      <div class="table-card">
+        <div class="table-head">
+          <h2>Send videos to Video Manager</h2>
+          <span class="muted">Editor pulls these from the Python app on his laptop</span>
+        </div>
+
+        <form class="video-send-form" id="videoSendForm">
+          <label>Client
+            <select id="videoClient" required>
+              <option value="">Choose synced client</option>
+              ${crmClients.map(client => `<option value="${client.crm_id}" data-name="${escapeAttr(client.business_name || '')}">${escapeHtml(client.business_name || 'Client')}</option>`).join('')}
+            </select>
+          </label>
+
+          <label>Due Date
+            <input class="input" id="videoDueDate" type="date" value="${escapeAttr(defaultVideoDueDate())}" readonly>
+          </label>
+
+          <label class="wide">Videos
+            <input class="input" id="videoFiles" type="file" accept="video/*" multiple required>
+          </label>
+
+          <label class="wide">Notes for Editor
+            <textarea id="videoNotes" placeholder="Explain the idea, edit direction, priorities, export needs, reference links, or anything your editor needs."></textarea>
+          </label>
+
+          <div class="video-selected wide" id="videoSelectedFiles">
+            <span class="muted">No videos selected yet.</span>
+          </div>
+
+          <div class="crm-send-actions wide">
+            <button class="btn btn-primary" type="submit" id="videoSendBtn">Send to Video Manager</button>
+            <button class="btn btn-light" type="button" id="videoClearBtn">Clear</button>
+          </div>
+
+          <div class="notice" id="videoNotice"></div>
+        </form>
+      </div>
+
+      <div class="table-card">
+        <div class="table-head">
+          <h2>Recent video sends</h2>
+          <span class="muted">${videoSubmissions.length} synced</span>
+        </div>
+
+        <div class="table-wrap video-submissions-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Created</th>
+                <th>Client</th>
+                <th>Due</th>
+                <th>Files</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${videoSubmissions.map(item => `
+                <tr>
+                  <td>${formatDateTime(item.created_at)}</td>
+                  <td><strong>${escapeHtml(item.client_name || 'Client')}</strong><br><span class="muted">${escapeHtml(item.submitted_by_email || '')}</span></td>
+                  <td>${escapeHtml(item.due_date || '—')}</td>
+                  <td>${Array.isArray(item.files) ? item.files.length : 0}</td>
+                  <td>${escapeHtml(titleCase(item.status || 'new'))}</td>
+                </tr>
+              `).join('') || `<tr><td colspan="5" class="muted">No videos sent yet.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>`;
+
+  const form = document.getElementById('videoSendForm');
+  const fileInput = document.getElementById('videoFiles');
+  const clear = document.getElementById('videoClearBtn');
+  form.addEventListener('submit', submitVideoSend);
+  fileInput.addEventListener('change', renderSelectedVideoFiles);
+  clear.addEventListener('click', () => {
+    form.reset();
+    renderSelectedVideoFiles();
+    showVideoNotice('Form cleared.');
+  });
+  renderSelectedVideoFiles();
+}
+
+async function loadVideoReferenceData(){
+  const [clientsResult, submissionsResult] = await Promise.all([
+    supabase.from('crm_clients').select('*').order('business_name', { ascending:true }),
+    supabase.from('video_submissions').select('*').order('created_at', { ascending:false }).limit(20)
+  ]);
+
+  if(clientsResult.error) throw clientsResult.error;
+  if(submissionsResult.error) throw submissionsResult.error;
+
+  crmClients = clientsResult.data || [];
+  videoSubmissions = submissionsResult.data || [];
+}
+
+function renderSelectedVideoFiles(){
+  const target = document.getElementById('videoSelectedFiles');
+  const input = document.getElementById('videoFiles');
+  if(!target || !input) return;
+  const files = Array.from(input.files || []);
+  target.innerHTML = files.length ? files.map(file => `
+    <div class="video-file-pill">
+      <strong>${escapeHtml(file.name)}</strong>
+      <span>${formatBytes(file.size)} · ${escapeHtml(file.type || 'video file')}</span>
+    </div>
+  `).join('') : '<span class="muted">No videos selected yet.</span>';
+}
+
+async function submitVideoSend(e){
+  e.preventDefault();
+  const btn = document.getElementById('videoSendBtn');
+  const clientSelect = document.getElementById('videoClient');
+  const fileInput = document.getElementById('videoFiles');
+  const clientCrmId = Number(clientSelect.value || 0) || null;
+  const clientName = clientSelect.selectedOptions[0]?.dataset.name || '';
+  const files = Array.from(fileInput.files || []);
+  const sentDate = todayIso();
+  const dueDate = defaultVideoDueDate(sentDate);
+  const clientSlug = slugFilePart(clientName || 'client');
+
+  if(!clientCrmId || !clientName){
+    showVideoNotice('Choose a synced client first.', true);
+    return;
+  }
+
+  if(!files.length){
+    showVideoNotice('Choose at least one video file.', true);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Uploading...';
+
+  const submissionId = crypto.randomUUID();
+  const uploaded = [];
+  const uploadedPaths = [];
+
+  for(const [index, file] of files.entries()){
+    const displayName = videoFileName(clientSlug, sentDate, index + 1, file.name);
+    const path = `${clientCrmId}/${submissionId}/${displayName}`;
+    showVideoNotice(`Uploading ${index + 1} of ${files.length}: ${displayName}`);
+
+    const { data, error } = await supabase.storage
+      .from('video-submissions')
+      .upload(path, file, {
+        cacheControl: '3600',
+        contentType: file.type || 'video/mp4',
+        upsert: false
+      });
+
+    if(error){
+      btn.disabled = false;
+      btn.textContent = 'Send to Video Manager';
+      showVideoNotice(error.message, true);
+      return;
+    }
+
+    uploaded.push({
+      name: displayName,
+      original_name: file.name,
+      size: file.size,
+      type: file.type,
+      storage_path: data.path,
+      uploaded_at: new Date().toISOString()
+    });
+    uploadedPaths.push(data.path);
+  }
+
+  showVideoNotice('Saving video job for editor...');
+  const { error } = await supabase.from('video_submissions').insert([{
+    client_crm_id: clientCrmId,
+    client_name: clientName,
+    notes: document.getElementById('videoNotes').value.trim(),
+    due_date: dueDate,
+    status: 'new',
+    files: uploaded,
+    submitted_by: session.user.id,
+    submitted_by_email: session.user.email
+  }]);
+
+  btn.disabled = false;
+  btn.textContent = 'Send to Video Manager';
+
+  if(error){
+    if(uploadedPaths.length){
+      await supabase.storage.from('video-submissions').remove(uploadedPaths);
+    }
+    showVideoNotice(`Could not save video job: ${error.message}`, true);
+    return;
+  }
+
+  e.target.reset();
+  renderSelectedVideoFiles();
+  await renderVideoSendView();
+  showVideoNotice('Sent to Video Manager. Your editor can sync it from the Python app.');
+}
+
+function showVideoNotice(message, isError = false){
+  const notice = document.getElementById('videoNotice');
+  if(!notice) return;
+  notice.textContent = message;
+  notice.className = `notice show${isError ? ' error' : ''}`;
+}
+
+function todayIso(){
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addDaysIso(iso, days){
+  const [year, month, day] = String(iso).split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function defaultVideoDueDate(baseIso = todayIso()){
+  return addDaysIso(baseIso, 5);
+}
+
+function slugFilePart(value){
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'client';
+}
+
+function fileExtension(name){
+  const match = String(name || '').match(/\.([a-zA-Z0-9]{1,12})$/);
+  return match ? `.${match[1].toLowerCase()}` : '';
+}
+
+function videoFileName(clientSlug, sentDate, index, originalName){
+  const ext = fileExtension(originalName) || '.mp4';
+  return `${clientSlug}-${sentDate}-video-${String(index).padStart(2, '0')}${ext}`;
+}
+
 
 async function renderCrmSenderView(){
   const area = document.getElementById('contentArea');
-  area.innerHTML = '<div class="table-card"><div class="detail-body muted">Loading CRM clients and projects...</div></div>';
+  area.innerHTML = '<div class="table-card"><div class="detail-body muted">Loading CRM clients, projects, and potential leads...</div></div>';
 
   try{
     await loadCrmReferenceData();
@@ -342,6 +615,85 @@ async function renderCrmSenderView(){
 
   area.innerHTML = `
     <section class="crm-sender-layout">
+      <div class="table-card">
+        <div class="table-head">
+          <h2>Send appointment to Client Management</h2>
+          <span class="muted">Shows on the CRM appointment calendar and 48-hour reminders</span>
+        </div>
+
+        <form class="crm-send-form" id="crmAppointmentForm">
+          <label>Client
+            <select id="appointmentClient" required>
+              <option value="">Choose synced client</option>
+              ${crmClients.map(client => `<option value="${client.crm_id}" data-name="${escapeAttr(client.business_name || '')}">${escapeHtml(client.business_name || 'Client')}</option>`).join('')}
+            </select>
+          </label>
+
+          <label>Appointment Name
+            <input class="input" id="appointmentTitle" placeholder="Consultation, follow-up, project meeting" required>
+          </label>
+
+          <label>Date
+            <input class="input" id="appointmentDate" type="date" required>
+          </label>
+
+          <label>Time
+            <input class="input" id="appointmentTime" type="time" required>
+          </label>
+
+          <label class="wide">Notes
+            <textarea id="appointmentNotes" placeholder="Call details, meeting link, address, or anything to remember"></textarea>
+          </label>
+
+          <div class="crm-send-actions wide">
+            <button class="btn btn-primary" type="submit" id="crmAppointmentSendBtn">Send Appointment to CRM</button>
+            <button class="btn btn-light" type="button" id="crmAppointmentClearBtn">Clear</button>
+          </div>
+
+          <div class="notice" id="crmAppointmentNotice"></div>
+        </form>
+      </div>
+
+      <div class="table-card">
+        <div class="table-head">
+          <h2>Send new lead to Client Management</h2>
+          <span class="muted">Lands in the CRM Potential Leads tab first</span>
+        </div>
+
+        <form class="crm-send-form" id="crmLeadForm">
+          <label>Lead Name
+            <input class="input" id="leadName" placeholder="Person's name" required>
+          </label>
+
+          <label>Company
+            <input class="input" id="leadCompany" placeholder="Business or organization">
+          </label>
+
+          <label>Phone
+            <input class="input" id="leadPhone" type="tel" placeholder="Phone number">
+          </label>
+
+          <label>Email
+            <input class="input" id="leadEmail" type="email" placeholder="Email address">
+          </label>
+
+          <label class="wide">Potential Project
+            <textarea id="leadProject" placeholder="Website, marketing, CRM, automation, maintenance, or other project details" required></textarea>
+          </label>
+
+          <label class="wide">Notes
+            <textarea id="leadNotes" placeholder="Budget, timeline, source, next step, or extra context"></textarea>
+          </label>
+
+          <div class="crm-send-actions wide">
+            <button class="btn btn-primary" type="submit" id="crmLeadSendBtn">Send Lead to CRM</button>
+            <button class="btn btn-light" type="button" id="crmLeadClearBtn">Clear</button>
+          </div>
+
+          <div class="notice" id="crmLeadNotice"></div>
+        </form>
+      </div>
+
       <div class="table-card">
         <div class="table-head">
           <h2>Send work to Client Management</h2>
@@ -398,12 +750,52 @@ async function renderCrmSenderView(){
           <div class="notice" id="crmNotice"></div>
         </form>
       </div>
+
+      <div class="table-card">
+        <div class="table-head">
+          <h2>Recent potential leads</h2>
+          <span class="muted">${crmPotentialLeads.length} synced</span>
+        </div>
+
+        <div class="table-wrap crm-leads-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Created</th>
+                <th>Lead</th>
+                <th>Company</th>
+                <th>Phone</th>
+                <th>Project</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${crmPotentialLeads.map(lead => `
+                <tr>
+                  <td>${formatDateTime(lead.created_at)}</td>
+                  <td><strong>${escapeHtml(lead.lead_name || '')}</strong><br><span class="muted">${escapeHtml(lead.email || '')}</span></td>
+                  <td>${escapeHtml(lead.company || '')}</td>
+                  <td>${escapeHtml(lead.phone || '')}</td>
+                  <td>${escapeHtml(lead.potential_project || '')}</td>
+                  <td>${escapeHtml(lead.status || 'pending')}</td>
+                </tr>
+              `).join('') || `<tr><td colspan="6" class="muted">No potential leads sent yet.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>`;
 
   const form = document.getElementById('crmWorkForm');
+  const leadForm = document.getElementById('crmLeadForm');
+  const appointmentForm = document.getElementById('crmAppointmentForm');
   const clear = document.getElementById('crmClearBtn');
+  const leadClear = document.getElementById('crmLeadClearBtn');
+  const appointmentClear = document.getElementById('crmAppointmentClearBtn');
   const clientSelect = document.getElementById('crmClient');
   form.addEventListener('submit', submitCrmWork);
+  leadForm.addEventListener('submit', submitCrmLead);
+  appointmentForm.addEventListener('submit', submitCrmAppointment);
   clientSelect.addEventListener('change', updateCrmProjectOptions);
   clear.addEventListener('click', () => {
     form.reset();
@@ -411,20 +803,34 @@ async function renderCrmSenderView(){
     updateCrmProjectOptions();
     showCrmNotice('Form cleared.');
   });
+  leadClear.addEventListener('click', () => {
+    leadForm.reset();
+    showCrmLeadNotice('Lead form cleared.');
+  });
+  appointmentClear.addEventListener('click', () => {
+    appointmentForm.reset();
+    showCrmAppointmentNotice('Appointment form cleared.');
+  });
   updateCrmProjectOptions();
 }
 
 async function loadCrmReferenceData(){
-  const [clientsResult, projectsResult] = await Promise.all([
+  const [clientsResult, projectsResult, leadsResult, appointmentsResult] = await Promise.all([
     supabase.from('crm_clients').select('*').order('business_name', { ascending:true }),
-    supabase.from('crm_projects').select('*').order('client_name', { ascending:true }).order('title', { ascending:true })
+    supabase.from('crm_projects').select('*').order('client_name', { ascending:true }).order('title', { ascending:true }),
+    supabase.from('crm_potential_leads').select('*').order('created_at', { ascending:false }).limit(20),
+    supabase.from('crm_appointments').select('*').order('appointment_date', { ascending:true }).order('appointment_time', { ascending:true }).limit(30)
   ]);
 
   if(clientsResult.error) throw clientsResult.error;
   if(projectsResult.error) throw projectsResult.error;
+  if(leadsResult.error) console.warn('Potential leads load failed:', leadsResult.error);
+  if(appointmentsResult.error) console.warn('Appointments load failed:', appointmentsResult.error);
 
   crmClients = clientsResult.data || [];
   crmProjects = projectsResult.data || [];
+  crmPotentialLeads = leadsResult.error ? [] : (leadsResult.data || []);
+  crmAppointments = appointmentsResult.error ? [] : (appointmentsResult.data || []);
 }
 
 function updateCrmProjectOptions(){
@@ -490,8 +896,91 @@ async function submitCrmWork(e){
   showCrmNotice('Sent. Open Website Inbox in Client Management and sync it.');
 }
 
+async function submitCrmLead(e){
+  e.preventDefault();
+  const btn = document.getElementById('crmLeadSendBtn');
+  const payload = {
+    lead_name: document.getElementById('leadName').value.trim(),
+    company: document.getElementById('leadCompany').value.trim(),
+    phone: document.getElementById('leadPhone').value.trim(),
+    email: document.getElementById('leadEmail').value.trim(),
+    potential_project: document.getElementById('leadProject').value.trim(),
+    notes: document.getElementById('leadNotes').value.trim(),
+    source: 'reimage_admin_portal'
+  };
+
+  if(!payload.lead_name || !payload.potential_project){
+    showCrmLeadNotice('Lead name and potential project are required.', true);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  const { error } = await supabase.from('crm_potential_leads').insert([payload]);
+  btn.disabled = false;
+  btn.textContent = 'Send Lead to CRM';
+
+  if(error){
+    showCrmLeadNotice(error.message, true);
+    return;
+  }
+
+  e.target.reset();
+  await renderCrmSenderView();
+  showCrmLeadNotice('Lead sent. It will appear under Potential Leads in Client Management.');
+}
+
+async function submitCrmAppointment(e){
+  e.preventDefault();
+  const btn = document.getElementById('crmAppointmentSendBtn');
+  const clientSelect = document.getElementById('appointmentClient');
+  const clientCrmId = Number(clientSelect.value || 0) || null;
+  const payload = {
+    client_crm_id: clientCrmId,
+    client_name: clientSelect.selectedOptions[0]?.dataset.name || '',
+    title: document.getElementById('appointmentTitle').value.trim(),
+    appointment_date: document.getElementById('appointmentDate').value || null,
+    appointment_time: document.getElementById('appointmentTime').value || null,
+    notes: document.getElementById('appointmentNotes').value.trim(),
+    source: 'reimage_admin_portal'
+  };
+
+  if(!payload.client_crm_id || !payload.client_name || !payload.title || !payload.appointment_date || !payload.appointment_time){
+    showCrmAppointmentNotice('Client, appointment name, date, and time are required.', true);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  const { error } = await supabase.from('crm_appointments').insert([payload]);
+  btn.disabled = false;
+  btn.textContent = 'Send Appointment to CRM';
+
+  if(error){
+    showCrmAppointmentNotice(error.message, true);
+    return;
+  }
+
+  e.target.reset();
+  showCrmAppointmentNotice('Appointment sent. It will appear in Client Management after appointment sync.');
+}
+
 function showCrmNotice(message, isError = false){
   const notice = document.getElementById('crmNotice');
+  if(!notice) return;
+  notice.textContent = message;
+  notice.className = `notice show${isError ? ' error' : ''}`;
+}
+
+function showCrmLeadNotice(message, isError = false){
+  const notice = document.getElementById('crmLeadNotice');
+  if(!notice) return;
+  notice.textContent = message;
+  notice.className = `notice show${isError ? ' error' : ''}`;
+}
+
+function showCrmAppointmentNotice(message, isError = false){
+  const notice = document.getElementById('crmAppointmentNotice');
   if(!notice) return;
   notice.textContent = message;
   notice.className = `notice show${isError ? ' error' : ''}`;
@@ -2285,7 +2774,7 @@ function invoicePreviewHtml(totals){
           <p>Marketing • Websites • Branding • Automation</p>
           <p>Connecticut, USA</p>
           <p>+1 (860) 718-5928</p>
-          <p>reimagbs@gmail.com</p>
+          <p>reimagebs@gmail.com</p>
         </div>
 
         <div>
@@ -2397,15 +2886,16 @@ async function renderSalesTeamView(){
   const area = document.getElementById('contentArea');
   area.innerHTML = '<div class="table-card"><div class="detail-body muted">Loading sales team data...</div></div>';
 
-  const [apps, profiles, leads, invoices, qrs] = await Promise.all([
+  const [apps, profiles, leads, invoices, qrs, examAttempts] = await Promise.all([
     supabase.from('sales_applications').select('*').order('submitted_at', { ascending:false }),
     supabase.from('salesman_profiles').select('*').order('created_at', { ascending:false }),
     supabase.from('sales_leads').select('*').order('updated_at', { ascending:false }),
     supabase.from('invoice_requests').select('*').order('created_at', { ascending:false }),
-    supabase.from('qr_code_requests').select('*').order('created_at', { ascending:false })
+    supabase.from('qr_code_requests').select('*').order('created_at', { ascending:false }),
+    supabase.from('sales_exam_attempts').select('*').order('started_at', { ascending:false })
   ]);
 
-  const firstError = [apps, profiles, leads, invoices, qrs].find(result => result.error)?.error;
+  const firstError = [apps, profiles, leads, invoices, qrs, examAttempts].find(result => result.error)?.error;
   if(firstError){
     area.innerHTML = `
       <div class="table-card">
@@ -2420,6 +2910,7 @@ async function renderSalesTeamView(){
   salesLeads = leads.data || [];
   salesInvoiceRequests = invoices.data || [];
   salesQrRequests = qrs.data || [];
+  salesExamAttempts = examAttempts.data || [];
 
   if(!selectedSalesApplicationId && salesApplications.length){
     selectedSalesApplicationId = salesApplications[0].id;
@@ -2433,8 +2924,15 @@ function renderSalesTeamContent(){
   const selected = salesApplications.find(appItem => appItem.id === selectedSalesApplicationId) || salesApplications[0] || null;
   const activeProfiles = salesmanProfiles.filter(profile => ['active_salesman','testing','onboarding','accepted'].includes(profile.status));
   const pendingRequests = [...salesInvoiceRequests, ...salesQrRequests].filter(request => !['completed','closed'].includes(request.status || 'pending'));
+  const sessionEmail = String(session?.user?.email || '').toLowerCase();
+  const adminEmailWarning = ADMIN_EMAILS.includes(sessionEmail) ? '' : `
+    <div class="admin-warning">
+      <strong>Sales data may be hidden by Supabase RLS.</strong>
+      <span>You are signed in as ${escapeHtml(session?.user?.email || 'unknown')}. The sales admin policies currently allow ${ADMIN_EMAILS.map(escapeHtml).join(' or ')}.</span>
+    </div>`;
 
   area.innerHTML = `
+    ${adminEmailWarning}
     <div class="sales-admin-grid">
       <section class="table-card">
         <div class="table-head">
@@ -2503,13 +3001,25 @@ function salesApplicationRow(appItem, selected){
 function salesApplicationDetail(appItem){
   const profile = salesmanProfiles.find(profileItem => profileItem.user_id === appItem.user_id);
   const assigned = profile ? salesLeads.filter(lead => lead.assigned_salesman_id === profile.id) : [];
+  const examAttempt = salesExamAttempts.find(attempt => attempt.user_id === appItem.user_id);
+  const examExpiredInProgress = examAttempt?.status === 'in_progress' && examAttempt?.expires_at && new Date(examAttempt.expires_at).getTime() <= Date.now();
+  const examNeedsReset = examAttempt && !examAttempt.passed && (['submitted','timed_out'].includes(examAttempt.status) || examExpiredInProgress);
 
   return `
     <div class="detail-grid">
       <div class="info-box"><span>Email</span><strong>${escapeHtml(appItem.email || '—')}</strong></div>
       <div class="info-box"><span>Phone</span><strong>${escapeHtml(appItem.phone || '—')}</strong></div>
       <div class="info-box"><span>City / State</span><strong>${escapeHtml(appItem.city_state || '—')}</strong></div>
-      <div class="info-box"><span>Test Score</span><strong>${appItem.test_score ? `${escapeHtml(appItem.test_score)}%` : '—'}</strong></div>
+      <div class="info-box"><span>Test Score</span><strong>${examAttempt?.score ? `${escapeHtml(examAttempt.score)}%` : appItem.test_score ? `${escapeHtml(appItem.test_score)}%` : '—'}</strong></div>
+    </div>
+
+    <div class="message-box">
+      <strong>Exam Attempt</strong><br>
+      Status: ${titleCase(examAttempt?.status || 'not_started')}<br>
+      Started: ${examAttempt?.started_at ? formatDateTime(examAttempt.started_at) : '—'}<br>
+      Expires: ${examAttempt?.expires_at ? formatDateTime(examAttempt.expires_at) : '—'}<br>
+      Passed: ${examAttempt?.passed ? 'Yes' : 'No'}
+      ${examNeedsReset ? '<div class="action-row"><button class="btn btn-primary" data-reinstate-exam="' + escapeAttr(appItem.user_id || '') + '">Reinstate Exam</button></div>' : ''}
     </div>
 
     <div class="message-box"><strong>Sales Experience</strong><br>${escapeHtml(appItem.sales_experience || '—')}</div>
@@ -2584,9 +3094,38 @@ function bindSalesTeamEvents(){
     assignLeadBtn.addEventListener('click', () => assignSalesLead(assignLeadBtn.dataset.profileId));
   }
 
+  document.querySelectorAll('[data-reinstate-exam]').forEach(btn => {
+    btn.addEventListener('click', () => reinstateSalesExam(btn.dataset.reinstateExam));
+  });
+
   document.querySelectorAll('[data-request-table]').forEach(btn => {
     btn.addEventListener('click', () => updateSalesRequestStatus(btn.dataset.requestTable, btn.dataset.requestId, btn.dataset.requestStatus));
   });
+}
+
+async function reinstateSalesExam(userId){
+  if(!userId){
+    alert('This applicant does not have a linked portal user yet.');
+    return;
+  }
+
+  const { error } = await supabase
+    .from('sales_exam_attempts')
+    .update({
+      status: 'admin_reset',
+      locked_reason: null,
+      reset_by: session.user.email,
+      reset_at: new Date().toISOString()
+    })
+    .eq('user_id', userId)
+    .in('status', ['submitted','timed_out','in_progress']);
+
+  if(error){
+    alert(error.message);
+    return;
+  }
+
+  await renderSalesTeamView();
 }
 
 async function updateSalesApplicationStatus(id, status){
@@ -2730,6 +3269,14 @@ function formatDateTime(value){
         minute:'2-digit'
       })
     : '—';
+}
+
+function formatBytes(bytes){
+  const size = Number(bytes || 0);
+  if(size < 1024) return `${size} B`;
+  if(size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  if(size < 1024 * 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
+  return `${(size / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
 function fullName(r){
