@@ -45,6 +45,7 @@ let crmAppointments = [];
 let videoSubmissions = [];
 
 const DEFAULT_INVOICE_SERVICE = 'Static Website + SEO';
+const MAX_VIDEO_UPLOAD_BYTES = 5 * 1024 * 1024 * 1024;
 
 const STATUS_OPTIONS = ['new', 'contacted', 'closed', 'spam'];
 
@@ -500,6 +501,13 @@ async function submitVideoSend(e){
 
   if(!files.length){
     showVideoNotice('Choose at least one video file.', true);
+    return;
+  }
+
+  const oversized = files.find(file => file.size > MAX_VIDEO_UPLOAD_BYTES);
+
+  if(oversized){
+    showVideoNotice(`${oversized.name} is ${formatBytes(oversized.size)}. The video sender is configured for files up to ${formatBytes(MAX_VIDEO_UPLOAD_BYTES)}.`, true);
     return;
   }
 
