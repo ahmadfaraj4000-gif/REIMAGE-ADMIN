@@ -241,20 +241,32 @@ async function loadRequests(){
     area.innerHTML = '<div class="table-card"><div class="detail-body muted">Loading submissions...</div></div>';
   }
 
-  const { data, error } = await supabase
-    .from('start_requests')
-    .select('*')
-    .order('created_at', { ascending:false });
+  const [requestsResult, appointmentsResult] = await Promise.all([
+    supabase
+      .from('start_requests')
+      .select('*')
+      .order('created_at', { ascending:false }),
+    supabase
+      .from('crm_appointments')
+      .select('*')
+      .order('appointment_date', { ascending:true })
+      .order('appointment_time', { ascending:true })
+  ]);
 
-  if(error){
+  if(requestsResult.error){
     area.innerHTML = `
       <div class="table-card">
-        <div class="detail-body notice show error">${escapeHtml(error.message)}</div>
+        <div class="detail-body notice show error">${escapeHtml(requestsResult.error.message)}</div>
       </div>`;
     return;
   }
 
-  requests = data || [];
+  if(appointmentsResult.error){
+    console.warn('CRM appointments load failed:', appointmentsResult.error);
+  }
+
+  requests = requestsResult.data || [];
+  crmAppointments = appointmentsResult.error ? [] : (appointmentsResult.data || []);
 
   if(!selectedId && requests.length){
     selectedId = requests[0].id;
@@ -299,6 +311,7 @@ function populateFilters(){
 }
 
 function renderStats(){
+  const bookedSlots = requests.filter(r => r.consultation_date && r.consultation_time).length + crmAppointments.length;
   document.getElementById('stats').innerHTML = `
     <section class="stats">
       <div class="stat-card">
@@ -318,7 +331,7 @@ function renderStats(){
 
       <div class="stat-card">
         <span>Booked Slots</span>
-        <strong>${requests.filter(r => r.consultation_date && r.consultation_time).length}</strong>
+        <strong>${bookedSlots}</strong>
       </div>
     </section>`;
 }
@@ -495,6 +508,7 @@ async function submitVideoSend(e){
 
   const submissionId = crypto.randomUUID();
   const uploaded = [];
+  const uploadedPaths = [];
 
   for(const [index, file] of files.entries()){
     const displayName = videoFileName(clientSlug, sentDate, index + 1, file.name);
@@ -524,6 +538,7 @@ async function submitVideoSend(e){
       storage_path: data.path,
       uploaded_at: new Date().toISOString()
     });
+    uploadedPaths.push(data.path);
   }
 
   showVideoNotice('Saving video job for editor...');
@@ -542,7 +557,10 @@ async function submitVideoSend(e){
   btn.textContent = 'Send to Video Manager';
 
   if(error){
-    showVideoNotice(error.message, true);
+    if(uploadedPaths.length){
+      await supabase.storage.from('video-submissions').remove(uploadedPaths);
+    }
+    showVideoNotice(`Could not save video job: ${error.message}`, true);
     return;
   }
 
@@ -572,6 +590,45 @@ function addDaysIso(iso, days){
 
 function defaultVideoDueDate(baseIso = todayIso()){
   return addDaysIso(baseIso, 5);
+}
+
+function defaultAppointmentDate(){
+  const now = new Date();
+  return now.getHours() >= 20 ? addDaysIso(todayIso(), 1) : todayIso();
+}
+
+function defaultAppointmentTime(){
+  const now = new Date();
+
+  if(now.getHours() >= 20){
+    return '09:00';
+  }
+
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const rounded = Math.ceil(minutes / 30) * 30;
+  const safe = Math.min(Math.max(rounded, 8 * 60), 20 * 60);
+  return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
+}
+
+function appointmentTimeOptions(){
+  const selected = defaultAppointmentTime();
+  const options = [];
+
+  for(let minutes = 6 * 60; minutes <= 22 * 60; minutes += 30){
+    const value = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+    const label = formatTimeLabel(value);
+    options.push(`<option value="${value}" ${value === selected ? 'selected' : ''}>${label}</option>`);
+  }
+
+  return options.join('');
+}
+
+function formatTimeLabel(value){
+  const [hourText, minuteText] = String(value || '00:00').split(':');
+  let hour = Number(hourText);
+  const period = hour >= 12 ? 'PM' : 'AM';
+  hour = hour % 12 || 12;
+  return `${hour}:${minuteText || '00'} ${period}`;
 }
 
 function slugFilePart(value){
@@ -629,11 +686,13 @@ async function renderCrmSenderView(){
           </label>
 
           <label>Date
-            <input class="input" id="appointmentDate" type="date" required>
+            <input class="input" id="appointmentDate" type="date" value="${escapeAttr(defaultAppointmentDate())}" required>
           </label>
 
           <label>Time
-            <input class="input" id="appointmentTime" type="time" required>
+            <select id="appointmentTime" required>
+              ${appointmentTimeOptions()}
+            </select>
           </label>
 
           <label class="wide">Notes
@@ -804,6 +863,8 @@ async function renderCrmSenderView(){
   });
   appointmentClear.addEventListener('click', () => {
     appointmentForm.reset();
+    document.getElementById('appointmentDate').value = defaultAppointmentDate();
+    document.getElementById('appointmentTime').value = defaultAppointmentTime();
     showCrmAppointmentNotice('Appointment form cleared.');
   });
   updateCrmProjectOptions();
@@ -957,6 +1018,8 @@ async function submitCrmAppointment(e){
   }
 
   e.target.reset();
+  document.getElementById('appointmentDate').value = defaultAppointmentDate();
+  document.getElementById('appointmentTime').value = defaultAppointmentTime();
   showCrmAppointmentNotice('Appointment sent. It will appear in Client Management after appointment sync.');
 }
 
@@ -1479,11 +1542,17 @@ function openClientInfoModal(r){
 
 function renderCalendarView(){
   const consults = filteredRequests().filter(r => r.consultation_date && r.consultation_time);
+  const appointmentEvents = crmAppointments.filter(item => item.appointment_date && item.appointment_time);
 
-  const monthItems = consults.filter(r => {
+  const monthConsults = consults.filter(r => {
     const d = parseLocalDate(r.consultation_date);
     return d.getMonth() === calViewDate.getMonth() && d.getFullYear() === calViewDate.getFullYear();
   });
+  const monthAppointments = appointmentEvents.filter(item => {
+    const d = parseLocalDate(item.appointment_date);
+    return d.getMonth() === calViewDate.getMonth() && d.getFullYear() === calViewDate.getFullYear();
+  });
+  const monthItems = monthConsults.length + monthAppointments.length;
 
   const currentMonthLabel = calViewDate.toLocaleDateString('en-US', {
     month:'long',
@@ -1505,6 +1574,7 @@ function renderCalendarView(){
       </div>
 
       <div class="calendar-legend">
+        <span><i class="legend-dot event-appointment-dot"></i>CRM Appointment</span>
         <span><i class="legend-dot badge-new-dot"></i>New</span>
         <span><i class="legend-dot badge-contacted-dot"></i>Contacted</span>
         <span><i class="legend-dot badge-closed-dot"></i>Closed</span>
@@ -1520,7 +1590,7 @@ function renderCalendarView(){
           </div>
 
           <div class="crm-month-title">${currentMonthLabel}</div>
-          <div class="month-count">${monthItems.length} consultation${monthItems.length === 1 ? '' : 's'}</div>
+          <div class="month-count">${monthItems} event${monthItems === 1 ? '' : 's'}</div>
         </div>
 
         <div class="crm-calendar-grid" id="crmCalendarGrid"></div>
@@ -1541,7 +1611,7 @@ function renderCalendarView(){
   document.getElementById('calendarTodayBtn').addEventListener('click', goCalendarToday);
   document.getElementById('calendarRefreshBtn').addEventListener('click', loadRequests);
 
-  renderCrmMonthCalendar(consults);
+  renderCrmMonthCalendar(consults, appointmentEvents);
 
   function goCalendarToday(){
     calViewDate = new Date();
@@ -1550,7 +1620,168 @@ function renderCalendarView(){
   }
 }
 
-function renderCrmMonthCalendar(consults){
+function renderCrmMonthCalendar(consults, appointments = []){
+  const grid = document.getElementById('crmCalendarGrid');
+  const y = calViewDate.getFullYear();
+  const m = calViewDate.getMonth();
+
+  const firstOfMonth = new Date(y, m, 1);
+  const start = new Date(y, m, 1 - firstOfMonth.getDay());
+  const todayIso = new Date().toISOString().slice(0,10);
+
+  const grouped = {};
+
+  consults.forEach(r => {
+    if(!grouped[r.consultation_date]){
+      grouped[r.consultation_date] = [];
+    }
+
+    grouped[r.consultation_date].push({
+      kind: 'consultation',
+      id: r.id,
+      time: r.consultation_time,
+      title: fullName(r),
+      status: r.status || 'new'
+    });
+  });
+
+  appointments.forEach(item => {
+    if(!grouped[item.appointment_date]){
+      grouped[item.appointment_date] = [];
+    }
+
+    grouped[item.appointment_date].push({
+      kind: 'appointment',
+      id: item.id,
+      time: item.appointment_time,
+      title: `${item.client_name || 'Client'} - ${item.title || 'Appointment'}`,
+      status: item.status || 'pending'
+    });
+  });
+
+  Object.keys(grouped).forEach(date => {
+    grouped[date].sort((a,b) => timeToMinutes(a.time) - timeToMinutes(b.time));
+  });
+
+  grid.innerHTML = `
+    ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div class="crm-dow">${d}</div>`).join('')}
+  `;
+
+  for(let i = 0; i < 42; i++){
+    const dt = new Date(start);
+    dt.setDate(start.getDate() + i);
+
+    const iso = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+    const isOtherMonth = dt.getMonth() !== m;
+    const isToday = iso === todayIso;
+    const items = grouped[iso] || [];
+
+    grid.insertAdjacentHTML('beforeend', `
+      <div class="crm-day ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'today-cell' : ''}" data-date="${iso}">
+        <div class="crm-day-number">${dt.getDate()}</div>
+
+        <div class="crm-day-events">
+          ${items.map(item => `
+            <button class="crm-event ${item.kind === 'appointment' ? 'event-appointment' : `event-${escapeAttr(item.status || 'new')}`}" data-kind="${escapeAttr(item.kind)}" data-id="${escapeAttr(item.id)}" title="${escapeAttr(item.title)}">
+              <span>${escapeHtml(formatCalendarEventTime(item.time))}</span>
+              <strong>${escapeHtml(item.title)}</strong>
+            </button>
+          `).join('')}
+        </div>
+      </div>`);
+  }
+
+  document.querySelectorAll('.crm-event').forEach(eventBtn => {
+    eventBtn.addEventListener('click', e => {
+      e.stopPropagation();
+
+      if(eventBtn.dataset.kind === 'appointment'){
+        const appointment = crmAppointments.find(item => String(item.id) === String(eventBtn.dataset.id));
+
+        if(appointment){
+          openCalendarAppointmentModal(appointment);
+        }
+
+        return;
+      }
+
+      const request = requests.find(r => String(r.id) === String(eventBtn.dataset.id));
+
+      if(request){
+        openCalendarRequestModal(request);
+      }
+    });
+  });
+}
+
+function formatCalendarEventTime(time){
+  if(!time) return '';
+
+  if(/\d{1,2}:\d{2}\s*(AM|PM)/i.test(String(time))){
+    return time;
+  }
+
+  if(/^\d{1,2}:\d{2}/.test(String(time))){
+    return formatTimeLabel(String(time).slice(0,5));
+  }
+
+  return time;
+}
+
+function openCalendarAppointmentModal(item){
+  closeCalendarRequestModal();
+
+  const modal = document.createElement('div');
+  modal.className = 'request-modal-backdrop';
+  modal.id = 'requestModalBackdrop';
+
+  modal.innerHTML = `
+    <div class="request-modal" role="dialog" aria-modal="true" aria-label="Appointment details">
+      <div class="request-modal-head">
+        <div>
+          <div class="kicker">CRM Appointment</div>
+          <h2>${escapeHtml(item.title || 'Appointment')}</h2>
+        </div>
+
+        <button class="modal-close" id="modalCloseBtn" aria-label="Close modal">×</button>
+      </div>
+
+      <div class="request-modal-body">
+        <div class="modal-status-row">
+          <span class="badge badge-contacted">${escapeHtml(titleCase(item.status || 'pending'))}</span>
+          <span>${escapeHtml(formatDateOnly(item.appointment_date))} ${escapeHtml(formatCalendarEventTime(item.appointment_time))}</span>
+        </div>
+
+        <div class="detail-grid modal-detail-grid">
+          <div class="info-box"><span>Client</span><strong>${escapeHtml(item.client_name || 'Client')}</strong></div>
+          <div class="info-box"><span>Source</span><strong>${escapeHtml(item.source || 'CRM Sender')}</strong></div>
+        </div>
+
+        <div class="message-box">${escapeHtml(item.notes || 'No notes saved for this appointment.')}</div>
+
+        <div class="action-row">
+          <button class="btn btn-light" id="modalCloseSecondaryBtn">Close</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  document.body.classList.add('modal-open');
+
+  document.getElementById('modalCloseBtn').addEventListener('click', closeCalendarRequestModal);
+  document.getElementById('modalCloseSecondaryBtn').addEventListener('click', closeCalendarRequestModal);
+
+  modal.addEventListener('click', e => {
+    if(e.target === modal) closeCalendarRequestModal();
+  });
+
+  document.addEventListener('keydown', handleModalEscape);
+}
+
+/*
+  Legacy consultation calendar code is intentionally kept out of the render path.
+*/
+function renderCrmMonthCalendarLegacy(consults){
   const grid = document.getElementById('crmCalendarGrid');
   const y = calViewDate.getFullYear();
   const m = calViewDate.getMonth();
@@ -1615,6 +1846,11 @@ function renderCrmMonthCalendar(consults){
 
 function timeToMinutes(time){
   if(!time) return 9999;
+
+  const twentyFourHour = String(time).match(/^(\d{1,2}):(\d{2})/);
+  if(twentyFourHour && !/(AM|PM)/i.test(String(time))){
+    return Number(twentyFourHour[1]) * 60 + Number(twentyFourHour[2]);
+  }
 
   const match = String(time).match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
 

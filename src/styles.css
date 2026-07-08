@@ -28,6 +28,7 @@ button,input,select,textarea{font-family:'Barlow',sans-serif}button{cursor:point
 .calendar-legend{display:flex;flex-wrap:wrap;align-items:center;gap:.75rem;padding:1rem;margin-bottom:1.2rem;border:1px solid rgba(255,255,255,.10);border-radius:20px;background:rgba(255,255,255,.035)}
 .calendar-legend span{display:inline-flex;align-items:center;gap:.45rem;padding:.45rem .75rem;border-radius:999px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);color:var(--light-gray);font-size:.86rem;font-weight:800}
 .legend-dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.event-appointment-dot{background:#6c63ff}
 .badge-new-dot{background:var(--teal-light)}
 .badge-contacted-dot{background:var(--gold-light)}
 .badge-closed-dot{background:var(--success)}
@@ -51,6 +52,7 @@ button,input,select,textarea{font-family:'Barlow',sans-serif}button{cursor:point
 .crm-event span{flex:0 0 auto;opacity:.95}
 .crm-event strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .event-new{background:linear-gradient(135deg,var(--teal),var(--teal-dark))}
+.event-appointment{background:linear-gradient(135deg,#6c63ff,#3f3bb8)}
 .event-contacted{background:linear-gradient(135deg,var(--gold),#a0731e)}
 .event-closed{background:linear-gradient(135deg,var(--success),#167348)}
 .event-spam{background:linear-gradient(135deg,var(--danger),#9f2525)}
@@ -231,6 +233,25 @@ h1,h2,h3,.crm-month-title,.sales-pipeline span,.stat-card strong,.info-box stron
   background:#fff!important;
   color:var(--portal-ink)!important;
   border:1px solid var(--portal-line)!important;
+}
+.admin-warning{
+  display:grid;
+  gap:.35rem;
+  margin-bottom:1rem;
+  border:1px solid rgba(200,146,42,.32);
+  border-radius:18px;
+  background:#fff7e6;
+  color:var(--portal-ink);
+  padding:1rem 1.1rem;
+  box-shadow:0 14px 36px rgba(7,24,38,.08);
+}
+.admin-warning strong{
+  color:var(--portal-ink);
+}
+.admin-warning span{
+  color:var(--portal-text);
+  line-height:1.5;
+  font-weight:700;
 }
 th{background:var(--portal-soft)!important;color:var(--teal-dark)!important}
 td,th{border-bottom:1px solid var(--portal-line)!important}
