@@ -41,6 +41,7 @@ let selectedSalesApplicationId = null;
 let crmClients = [];
 let crmProjects = [];
 let crmPotentialLeads = [];
+let crmAppointments = [];
 let videoSubmissions = [];
 
 const DEFAULT_INVOICE_SERVICE = 'Static Website + SEO';
@@ -611,6 +612,45 @@ async function renderCrmSenderView(){
     <section class="crm-sender-layout">
       <div class="table-card">
         <div class="table-head">
+          <h2>Send appointment to Client Management</h2>
+          <span class="muted">Shows on the CRM appointment calendar and 48-hour reminders</span>
+        </div>
+
+        <form class="crm-send-form" id="crmAppointmentForm">
+          <label>Client
+            <select id="appointmentClient" required>
+              <option value="">Choose synced client</option>
+              ${crmClients.map(client => `<option value="${client.crm_id}" data-name="${escapeAttr(client.business_name || '')}">${escapeHtml(client.business_name || 'Client')}</option>`).join('')}
+            </select>
+          </label>
+
+          <label>Appointment Name
+            <input class="input" id="appointmentTitle" placeholder="Consultation, follow-up, project meeting" required>
+          </label>
+
+          <label>Date
+            <input class="input" id="appointmentDate" type="date" required>
+          </label>
+
+          <label>Time
+            <input class="input" id="appointmentTime" type="time" required>
+          </label>
+
+          <label class="wide">Notes
+            <textarea id="appointmentNotes" placeholder="Call details, meeting link, address, or anything to remember"></textarea>
+          </label>
+
+          <div class="crm-send-actions wide">
+            <button class="btn btn-primary" type="submit" id="crmAppointmentSendBtn">Send Appointment to CRM</button>
+            <button class="btn btn-light" type="button" id="crmAppointmentClearBtn">Clear</button>
+          </div>
+
+          <div class="notice" id="crmAppointmentNotice"></div>
+        </form>
+      </div>
+
+      <div class="table-card">
+        <div class="table-head">
           <h2>Send new lead to Client Management</h2>
           <span class="muted">Lands in the CRM Potential Leads tab first</span>
         </div>
@@ -743,11 +783,14 @@ async function renderCrmSenderView(){
 
   const form = document.getElementById('crmWorkForm');
   const leadForm = document.getElementById('crmLeadForm');
+  const appointmentForm = document.getElementById('crmAppointmentForm');
   const clear = document.getElementById('crmClearBtn');
   const leadClear = document.getElementById('crmLeadClearBtn');
+  const appointmentClear = document.getElementById('crmAppointmentClearBtn');
   const clientSelect = document.getElementById('crmClient');
   form.addEventListener('submit', submitCrmWork);
   leadForm.addEventListener('submit', submitCrmLead);
+  appointmentForm.addEventListener('submit', submitCrmAppointment);
   clientSelect.addEventListener('change', updateCrmProjectOptions);
   clear.addEventListener('click', () => {
     form.reset();
@@ -759,23 +802,30 @@ async function renderCrmSenderView(){
     leadForm.reset();
     showCrmLeadNotice('Lead form cleared.');
   });
+  appointmentClear.addEventListener('click', () => {
+    appointmentForm.reset();
+    showCrmAppointmentNotice('Appointment form cleared.');
+  });
   updateCrmProjectOptions();
 }
 
 async function loadCrmReferenceData(){
-  const [clientsResult, projectsResult, leadsResult] = await Promise.all([
+  const [clientsResult, projectsResult, leadsResult, appointmentsResult] = await Promise.all([
     supabase.from('crm_clients').select('*').order('business_name', { ascending:true }),
     supabase.from('crm_projects').select('*').order('client_name', { ascending:true }).order('title', { ascending:true }),
-    supabase.from('crm_potential_leads').select('*').order('created_at', { ascending:false }).limit(20)
+    supabase.from('crm_potential_leads').select('*').order('created_at', { ascending:false }).limit(20),
+    supabase.from('crm_appointments').select('*').order('appointment_date', { ascending:true }).order('appointment_time', { ascending:true }).limit(30)
   ]);
 
   if(clientsResult.error) throw clientsResult.error;
   if(projectsResult.error) throw projectsResult.error;
   if(leadsResult.error) console.warn('Potential leads load failed:', leadsResult.error);
+  if(appointmentsResult.error) console.warn('Appointments load failed:', appointmentsResult.error);
 
   crmClients = clientsResult.data || [];
   crmProjects = projectsResult.data || [];
   crmPotentialLeads = leadsResult.error ? [] : (leadsResult.data || []);
+  crmAppointments = appointmentsResult.error ? [] : (appointmentsResult.data || []);
 }
 
 function updateCrmProjectOptions(){
@@ -875,6 +925,41 @@ async function submitCrmLead(e){
   showCrmLeadNotice('Lead sent. It will appear under Potential Leads in Client Management.');
 }
 
+async function submitCrmAppointment(e){
+  e.preventDefault();
+  const btn = document.getElementById('crmAppointmentSendBtn');
+  const clientSelect = document.getElementById('appointmentClient');
+  const clientCrmId = Number(clientSelect.value || 0) || null;
+  const payload = {
+    client_crm_id: clientCrmId,
+    client_name: clientSelect.selectedOptions[0]?.dataset.name || '',
+    title: document.getElementById('appointmentTitle').value.trim(),
+    appointment_date: document.getElementById('appointmentDate').value || null,
+    appointment_time: document.getElementById('appointmentTime').value || null,
+    notes: document.getElementById('appointmentNotes').value.trim(),
+    source: 'reimage_admin_portal'
+  };
+
+  if(!payload.client_crm_id || !payload.client_name || !payload.title || !payload.appointment_date || !payload.appointment_time){
+    showCrmAppointmentNotice('Client, appointment name, date, and time are required.', true);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  const { error } = await supabase.from('crm_appointments').insert([payload]);
+  btn.disabled = false;
+  btn.textContent = 'Send Appointment to CRM';
+
+  if(error){
+    showCrmAppointmentNotice(error.message, true);
+    return;
+  }
+
+  e.target.reset();
+  showCrmAppointmentNotice('Appointment sent. It will appear in Client Management after appointment sync.');
+}
+
 function showCrmNotice(message, isError = false){
   const notice = document.getElementById('crmNotice');
   if(!notice) return;
@@ -884,6 +969,13 @@ function showCrmNotice(message, isError = false){
 
 function showCrmLeadNotice(message, isError = false){
   const notice = document.getElementById('crmLeadNotice');
+  if(!notice) return;
+  notice.textContent = message;
+  notice.className = `notice show${isError ? ' error' : ''}`;
+}
+
+function showCrmAppointmentNotice(message, isError = false){
+  const notice = document.getElementById('crmAppointmentNotice');
   if(!notice) return;
   notice.textContent = message;
   notice.className = `notice show${isError ? ' error' : ''}`;
