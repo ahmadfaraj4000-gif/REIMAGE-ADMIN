@@ -432,7 +432,7 @@ async function renderVideoSendView(){
                 <tr>
                   <td>${formatDateTime(item.created_at)}</td>
                   <td><strong>${escapeHtml(item.client_name || 'Client')}</strong><br><span class="muted">${escapeHtml(item.submitted_by_email || '')}</span></td>
-                  <td>${escapeHtml(item.due_date || '—')}</td>
+                  <td>${escapeHtml(item.due_date || '-')}</td>
                   <td>${Array.isArray(item.files) ? item.files.length : 0}</td>
                   <td>${escapeHtml(titleCase(item.status || 'new'))}</td>
                 </tr>
@@ -1926,7 +1926,7 @@ function openCalendarRequestModal(r){
 
           <div class="info-box">
             <span>Consultation Time</span>
-            <strong>${escapeHtml(r.consultation_time || '—')}</strong>
+            <strong>${escapeHtml(r.consultation_time || '-')}</strong>
           </div>
         </div>
 
@@ -2954,7 +2954,7 @@ function invoiceItemEditorHtml(item){
     <div class="ri-service-row ${customService ? 'is-custom' : ''}" data-item-id="${escapeAttr(item.id)}">
       <select data-item-field="service" title="Service preset">
         ${INVOICE_SERVICES.map(service => `
-          <option value="${escapeAttr(service.name)}" ${item.service === service.name ? 'selected' : ''}>${escapeHtml(service.name)} — ${billingLabel(service.billingCycle)}</option>
+          <option value="${escapeAttr(service.name)}" ${item.service === service.name ? 'selected' : ''}>${escapeHtml(service.name)} - ${billingLabel(service.billingCycle)}</option>
         `).join('')}
       </select>
 
@@ -2991,7 +2991,7 @@ function invoicePreviewHtml(totals){
 
         <div class="ri-paper-meta">
           <h2>Invoice</h2>
-          <p><strong>Invoice #:</strong> ${escapeHtml(invoiceData.invoiceNumber || '—')}</p>
+          <p><strong>Invoice #:</strong> ${escapeHtml(invoiceData.invoiceNumber || '-')}</p>
           <p><strong>Date:</strong> ${formatDateOnly(invoiceData.invoiceDate)}</p>
           <p><strong>Due:</strong> ${formatDateOnly(invoiceData.dueDate)}</p>
         </div>
@@ -3040,7 +3040,7 @@ function invoicePreviewHtml(totals){
             <tr>
               <td>${escapeHtml(item.service)}</td>
               <td>${escapeHtml(billingLabel(item.billingCycle))}</td>
-              <td>${escapeHtml(item.description || '—')}</td>
+              <td>${escapeHtml(item.description || '-')}</td>
               <td>${escapeHtml(item.quantity || '0')}</td>
               <td>${invoiceMoney(item.rate)}</td>
               <td>${invoiceMoney(Number(item.quantity || 0) * Number(item.rate || 0))}</td>
@@ -3246,25 +3246,25 @@ function salesApplicationDetail(appItem){
 
   return `
     <div class="detail-grid">
-      <div class="info-box"><span>Email</span><strong>${escapeHtml(appItem.email || '—')}</strong></div>
-      <div class="info-box"><span>Phone</span><strong>${escapeHtml(appItem.phone || '—')}</strong></div>
-      <div class="info-box"><span>City / State</span><strong>${escapeHtml(appItem.city_state || '—')}</strong></div>
-      <div class="info-box"><span>Test Score</span><strong>${examAttempt?.score ? `${escapeHtml(examAttempt.score)}%` : appItem.test_score ? `${escapeHtml(appItem.test_score)}%` : '—'}</strong></div>
+      <div class="info-box"><span>Email</span><strong>${escapeHtml(appItem.email || '-')}</strong></div>
+      <div class="info-box"><span>Phone</span><strong>${escapeHtml(appItem.phone || '-')}</strong></div>
+      <div class="info-box"><span>City / State</span><strong>${escapeHtml(appItem.city_state || '-')}</strong></div>
+      <div class="info-box"><span>Test Score</span><strong>${examAttempt?.score ? `${escapeHtml(examAttempt.score)}%` : appItem.test_score ? `${escapeHtml(appItem.test_score)}%` : '-'}</strong></div>
     </div>
 
     <div class="message-box">
       <strong>Exam Attempt</strong><br>
       Status: ${titleCase(examAttempt?.status || 'not_started')}<br>
-      Started: ${examAttempt?.started_at ? formatDateTime(examAttempt.started_at) : '—'}<br>
-      Expires: ${examAttempt?.expires_at ? formatDateTime(examAttempt.expires_at) : '—'}<br>
+      Started: ${examAttempt?.started_at ? formatDateTime(examAttempt.started_at) : '-'}<br>
+      Expires: ${examAttempt?.expires_at ? formatDateTime(examAttempt.expires_at) : '-'}<br>
       Passed: ${examAttempt?.passed ? 'Yes' : 'No'}
       ${examNeedsReset ? '<div class="action-row"><button class="btn btn-primary" data-reinstate-exam="' + escapeAttr(appItem.user_id || '') + '">Reinstate Exam</button></div>' : ''}
     </div>
 
-    <div class="message-box"><strong>Sales Experience</strong><br>${escapeHtml(appItem.sales_experience || '—')}</div>
-    <div class="message-box"><strong>Why Join</strong><br>${escapeHtml(appItem.why_join || '—')}</div>
-    <div class="message-box"><strong>Industries</strong><br>${escapeHtml(appItem.industries || '—')}</div>
-    <div class="message-box"><strong>Availability</strong><br>${escapeHtml(appItem.availability || '—')}</div>
+    <div class="message-box"><strong>Sales Experience</strong><br>${escapeHtml(appItem.sales_experience || '-')}</div>
+    <div class="message-box"><strong>Why Join</strong><br>${escapeHtml(appItem.why_join || '-')}</div>
+    <div class="message-box"><strong>Industries</strong><br>${escapeHtml(appItem.industries || '-')}</div>
+    <div class="message-box"><strong>Availability</strong><br>${escapeHtml(appItem.availability || '-')}</div>
 
     <label>Internal Notes</label>
     <textarea class="input" id="salesAdminNotes">${escapeHtml(appItem.admin_notes || '')}</textarea>
@@ -3293,7 +3293,7 @@ function salesApplicationDetail(appItem){
       <button class="btn btn-primary" id="assignLeadBtn" data-profile-id="${escapeAttr(profile?.id || '')}">Assign Lead</button>
     </div>
 
-    <div class="message-box"><strong>Assigned Leads</strong><br>${assigned.length ? assigned.map(lead => `${escapeHtml(lead.business_name)} — ${titleCase(lead.status || 'new')}`).join('<br>') : 'No assigned leads yet.'}</div>
+    <div class="message-box"><strong>Assigned Leads</strong><br>${assigned.length ? assigned.map(lead => `${escapeHtml(lead.business_name)} - ${titleCase(lead.status || 'new')}`).join('<br>') : 'No assigned leads yet.'}</div>
   `;
 }
 
@@ -3480,7 +3480,7 @@ function statusBadge(status = 'new'){
 function consultationLabel(r){
   return r && r.consultation_date
     ? `${formatDateOnly(r.consultation_date)} ${r.consultation_time || ''}`
-    : '—';
+    : '-';
 }
 
 function parseLocalDate(iso){
@@ -3495,7 +3495,7 @@ function formatDateOnly(iso){
         day:'numeric',
         year:'numeric'
       })
-    : '—';
+    : '-';
 }
 
 function formatDateTime(value){
@@ -3507,7 +3507,7 @@ function formatDateTime(value){
         hour:'numeric',
         minute:'2-digit'
       })
-    : '—';
+    : '-';
 }
 
 function formatBytes(bytes){
