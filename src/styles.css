@@ -258,6 +258,58 @@ td,th{border-bottom:1px solid var(--portal-line)!important}
 tr:hover,tr.active,.sales-row:hover,.sales-row.active,.message-thread-row:hover,.message-thread-row.active{background:rgba(8,119,232,.08)!important}
 .crm-dow{background:var(--portal-soft)!important;color:var(--portal-muted)!important}
 .crm-day{background:rgba(255,255,255,.54)!important;border-color:var(--portal-line)!important}
+
+/* Marketplace manager */
+.marketplace-admin-actions{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:1.5rem;
+  margin:1.5rem 0;
+}
+.marketplace-admin-actions h1{margin:0 0 .35rem;font-size:clamp(2rem,4vw,3.2rem);letter-spacing:-.05em}
+.marketplace-admin-actions p{margin:0}
+.marketplace-admin-actions>div:last-child{display:flex;gap:.7rem;flex-wrap:wrap}
+.marketplace-admin-layout{display:grid;grid-template-columns:310px minmax(0,1fr);gap:1.25rem;align-items:start}
+.marketplace-business-list{position:sticky;top:106px;max-height:calc(100vh - 130px);overflow:hidden}
+.marketplace-list-items{max-height:calc(100vh - 220px);overflow:auto;padding:.55rem}
+.marketplace-list-item{display:flex;width:100%;flex-direction:column;align-items:flex-start;gap:.35rem;border:0;border-radius:14px;padding:.85rem .9rem;background:transparent;color:var(--portal-ink);text-align:left;cursor:pointer}
+.marketplace-list-item:hover,.marketplace-list-item.active{background:rgba(8,119,232,.09)}
+.marketplace-list-item span{font-weight:900;line-height:1.25}
+.marketplace-list-item small{color:var(--portal-muted);font-weight:700}
+.marketplace-empty-list{padding:1rem}
+.marketplace-editor{padding:1.4rem}
+.marketplace-editor-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.4rem}
+.marketplace-editor-head h2{margin:.3rem 0 0}
+.marketplace-form-grid,.marketplace-mini-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+.marketplace-form-grid label,.marketplace-mini-form label{display:flex;min-width:0;flex-direction:column;gap:.45rem;color:var(--portal-muted);font-size:.75rem;font-weight:900;letter-spacing:.02em}
+.marketplace-form-grid .wide,.marketplace-mini-form .wide{grid-column:1/-1}
+.marketplace-form-grid textarea,.marketplace-mini-form textarea{min-height:110px;resize:vertical}
+.marketplace-category-checks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.7rem;border:1px solid var(--portal-line);border-radius:16px;padding:1rem}
+.marketplace-category-checks legend{padding:0 .4rem;color:var(--portal-muted);font-size:.75rem;font-weight:900}
+.marketplace-category-checks label{display:flex;flex-direction:row;align-items:center;gap:.45rem;font-size:.72rem}
+.marketplace-category-checks input,.marketplace-check input{width:17px;height:17px}
+.marketplace-form-actions{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:1.3rem;border-top:1px solid var(--portal-line);padding-top:1.2rem}
+.marketplace-form-actions span{max-width:560px;font-size:.75rem;line-height:1.5}
+.marketplace-admin-secondary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.25rem;margin-top:1.25rem}
+.marketplace-mini-form{padding:1.25rem}
+.marketplace-mini-form .marketplace-check{align-items:center;justify-content:flex-start;flex-direction:row;padding-top:1.8rem}
+.marketplace-slots{margin-top:1.25rem}
+.marketplace-form code{font-size:.8em}
+@media(max-width:1050px){
+  .marketplace-admin-layout{grid-template-columns:1fr}
+  .marketplace-business-list{position:static;max-height:none}
+  .marketplace-list-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));max-height:340px}
+  .marketplace-category-checks{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:760px){
+  .marketplace-admin-actions,.marketplace-form-actions{align-items:stretch;flex-direction:column}
+  .marketplace-admin-actions>div:last-child{display:grid}
+  .marketplace-form-grid,.marketplace-mini-form,.marketplace-admin-secondary{grid-template-columns:1fr}
+  .marketplace-form-grid .wide,.marketplace-mini-form .wide{grid-column:auto}
+  .marketplace-list-items,.marketplace-category-checks{grid-template-columns:1fr}
+  .marketplace-editor-head{align-items:flex-start;flex-direction:column}
+}
 @media(max-width:720px){
   .topbar{width:min(100% - 24px,720px)!important;border-radius:24px!important;align-items:center!important}
 }

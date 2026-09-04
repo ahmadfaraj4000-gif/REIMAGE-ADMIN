@@ -43,6 +43,11 @@ let crmProjects = [];
 let crmPotentialLeads = [];
 let crmAppointments = [];
 let videoSubmissions = [];
+let marketplaceBusinesses = [];
+let marketplaceCategories = [];
+let marketplaceFeatureSlots = [];
+let marketplaceMetrics = [];
+let selectedMarketplaceBusinessId = null;
 
 const DEFAULT_INVOICE_SERVICE = 'Static Website + SEO';
 const MAX_VIDEO_UPLOAD_BYTES = 5 * 1024 * 1024 * 1024;
@@ -154,9 +159,10 @@ async function renderAdmin(){
           <button class="tab ${activeView === 'video' ? 'active' : ''}" data-view="video">Video Send</button>
           <button class="tab ${activeView === 'invoice' ? 'active' : ''}" data-view="invoice">Invoices</button>
           <button class="tab ${activeView === 'qr' ? 'active' : ''}" data-view="qr">QR Codes</button>
+          <button class="tab ${activeView === 'marketplace' ? 'active' : ''}" data-view="marketplace">Marketplace</button>
         </div>
 
-        ${['invoice','qr','sales','crm','video'].includes(activeView) ? '' : `
+        ${['invoice','qr','sales','crm','video','marketplace'].includes(activeView) ? '' : `
           <div class="toolbar">
             <input class="input" id="searchInput" placeholder="Search name, email, business, message..." value="${escapeAttr(filters.search)}">
             <select id="serviceFilter"></select>
@@ -195,6 +201,12 @@ async function renderAdmin(){
     return;
   }
 
+  if(activeView === 'marketplace'){
+    renderStats();
+    await renderMarketplaceView();
+    return;
+  }
+
   await loadRequests();
 }
 
@@ -211,6 +223,8 @@ function bindTopEvents(){
       renderCrmSenderView();
     } else if(activeView === 'video'){
       renderVideoSendView();
+    } else if(activeView === 'marketplace'){
+      renderMarketplaceView();
     } else {
       loadRequests();
     }
@@ -350,6 +364,8 @@ function renderContent(){
     renderCrmSenderView();
   } else if(activeView === 'video'){
     renderVideoSendView();
+  } else if(activeView === 'marketplace'){
+    renderMarketplaceView();
   } else {
     renderListView();
   }
@@ -3438,6 +3454,316 @@ function salesStatusBadge(status = 'pending_review'){
 }
 
 /* =========================
+   MARKETPLACE
+========================= */
+
+async function renderMarketplaceView(){
+  const area = document.getElementById('contentArea');
+  area.innerHTML = '<div class="table-card"><div class="detail-body muted">Loading marketplace catalog...</div></div>';
+
+  const [categoriesResult, businessesResult, linksResult, mediaResult, featuresResult, metricsResult] = await Promise.all([
+    supabase.from('marketplace_categories').select('*').order('display_order', { ascending:true }),
+    supabase.from('marketplace_businesses').select('*').order('region_rank', { ascending:true }).order('name', { ascending:true }),
+    supabase.from('marketplace_business_categories').select('*'),
+    supabase.from('marketplace_media').select('*').order('display_order', { ascending:true }),
+    supabase.from('marketplace_feature_slots').select('*, marketplace_categories(name), marketplace_businesses(name)').order('starts_at', { ascending:false }),
+    supabase.from('marketplace_daily_metrics').select('*').order('metric_date', { ascending:false })
+  ]);
+
+  const failed = [categoriesResult, businessesResult, linksResult, mediaResult, featuresResult, metricsResult].find(result => result.error);
+  if(failed){
+    area.innerHTML = `<div class="table-card"><div class="detail-body"><div class="notice show error">${escapeHtml(failed.error.message)}</div><p class="muted">Apply <code>supabase/sql/marketplace.sql</code> and <code>supabase/sql/marketplace_seed.sql</code> to enable marketplace management.</p></div></div>`;
+    return;
+  }
+
+  marketplaceCategories = categoriesResult.data || [];
+  marketplaceBusinesses = (businessesResult.data || []).map(business => ({
+    ...business,
+    category_ids: (linksResult.data || []).filter(link => link.business_id === business.id).sort((a,b) => Number(b.is_primary) - Number(a.is_primary)).map(link => link.category_id),
+    primary_media: (mediaResult.data || []).find(item => item.business_id === business.id && item.is_primary) || null
+  }));
+  marketplaceFeatureSlots = featuresResult.data || [];
+  marketplaceMetrics = metricsResult.data || [];
+
+  if(!selectedMarketplaceBusinessId && marketplaceBusinesses.length){
+    selectedMarketplaceBusinessId = marketplaceBusinesses[0].id;
+  }
+  renderMarketplaceManager();
+}
+
+function blankMarketplaceBusiness(){
+  return {
+    id:null, slug:'', name:'', status:'draft', location_type:'storefront', location_label:'Hartford', location_keys:['hartford'], region_rank:1,
+    street:'', city:'Hartford', state:'CT', postal_code:'', secondary_address:'', service_area:'', phone:'', website_url:'',
+    primary_cta_label:'Visit Website', primary_cta_url:'', secondary_cta_label:'', secondary_cta_url:'', short_bio:'', long_bio:'',
+    specialties:[], tags:[], faq:[], schema_type:'LocalBusiness', verified_at:todayIso(), category_ids:[], primary_media:null
+  };
+}
+
+function renderMarketplaceManager(){
+  const area = document.getElementById('contentArea');
+  const selected = marketplaceBusinesses.find(item => item.id === selectedMarketplaceBusinessId) || blankMarketplaceBusiness();
+  const published = marketplaceBusinesses.filter(item => item.status === 'published').length;
+  const needsReview = marketplaceBusinesses.filter(item => item.status === 'verification_needed').length;
+  const activeSlots = marketplaceFeatureSlots.filter(slot => ['active','scheduled'].includes(slot.status) && new Date(slot.ends_at) > new Date()).length;
+
+  document.getElementById('stats').innerHTML = `<section class="stats"><div class="stat-card"><span>Marketplace Listings</span><strong>${marketplaceBusinesses.length}</strong></div><div class="stat-card"><span>Published</span><strong>${published}</strong></div><div class="stat-card"><span>Needs Verification</span><strong>${needsReview}</strong></div><div class="stat-card"><span>Featured Slots</span><strong>${activeSlots}</strong></div></section>`;
+
+  area.innerHTML = `
+    <div class="marketplace-admin-actions">
+      <div><h1>Hartford Marketplace</h1><p class="muted">Manage public listings, categories, images, verification, and featured placements.</p></div>
+      <div><button class="btn btn-light" id="newMarketplaceBusinessBtn">New listing</button><button class="btn btn-primary" id="publishMarketplaceBtn">Publish Marketplace Changes</button></div>
+    </div>
+    <div class="notice" id="marketplaceNotice"></div>
+    <section class="marketplace-admin-layout">
+      <aside class="table-card marketplace-business-list">
+        <div class="table-head"><h2>Businesses</h2><span class="muted">${marketplaceBusinesses.length} total</span></div>
+        <div class="marketplace-list-items">${marketplaceBusinesses.map(item => `
+          <button type="button" class="marketplace-list-item ${item.id === selected.id ? 'active' : ''}" data-marketplace-business-id="${item.id}">
+            <span>${escapeHtml(item.name)}</span><small>${escapeHtml(item.location_label)} · ${escapeHtml(titleCase(item.status))}</small>
+          </button>`).join('') || '<p class="muted marketplace-empty-list">No listings yet.</p>'}</div>
+      </aside>
+      <div class="table-card marketplace-editor">${marketplaceBusinessForm(selected)}</div>
+    </section>
+    <section class="marketplace-admin-secondary">
+      <div class="table-card">
+        <div class="table-head"><h2>Featured placement</h2><span class="muted">One active slot per category</span></div>
+        ${marketplaceFeatureForm()}
+      </div>
+      <div class="table-card">
+        <div class="table-head"><h2>Category settings</h2><span class="muted">Public labels and SEO copy</span></div>
+        ${marketplaceCategoryForm()}
+      </div>
+    </section>
+    <section class="table-card marketplace-slots">
+      <div class="table-head"><h2>Placement calendar</h2><span class="muted">${marketplaceFeatureSlots.length} records</span></div>
+      <div class="table-wrap"><table><thead><tr><th>Category</th><th>Business</th><th>Type</th><th>Dates</th><th>Status</th><th>Impressions</th><th>Clicks</th><th>Invoice</th></tr></thead><tbody>${marketplaceFeatureSlots.map(slot => `<tr><td>${escapeHtml(slot.marketplace_categories?.name || '-')}</td><td>${escapeHtml(slot.marketplace_businesses?.name || '-')}</td><td>${escapeHtml(titleCase(slot.placement_type))}</td><td>${formatDateTime(slot.starts_at)} – ${formatDateTime(slot.ends_at)}</td><td>${statusBadge(slot.status)}</td><td>${marketplaceMetricTotal(slot.business_id, slot.category_id, 'featured_impression')}</td><td>${marketplaceMetricTotal(slot.business_id, slot.category_id, 'outbound_click')}</td><td>${escapeHtml(slot.invoice_reference || 'Editorial')}</td></tr>`).join('') || '<tr><td colspan="8" class="muted">No featured placements scheduled.</td></tr>'}</tbody></table></div>
+    </section>`;
+
+  bindMarketplaceEvents();
+}
+
+function marketplaceBusinessForm(item){
+  const selectedCategories = new Set(item.category_ids || []);
+  return `<form id="marketplaceBusinessForm" class="marketplace-form">
+    <input type="hidden" id="marketplaceBusinessId" value="${escapeAttr(item.id || '')}">
+    <div class="marketplace-editor-head"><div><div class="kicker">${item.id ? 'Edit listing' : 'New listing'}</div><h2>${escapeHtml(item.name || 'Add a business')}</h2></div>${item.id ? `<a class="btn btn-light" href="https://reimagebs.com/marketplace/businesses/${escapeAttr(item.slug)}/" target="_blank" rel="noopener">View live profile</a>` : ''}</div>
+    <div class="marketplace-form-grid">
+      <label>Name<input class="input" id="marketplaceName" value="${escapeAttr(item.name)}" required></label>
+      <label>URL slug<input class="input" id="marketplaceSlug" value="${escapeAttr(item.slug)}" pattern="[a-z0-9]+(-[a-z0-9]+)*" required></label>
+      <label>Status<select id="marketplaceStatus"><option value="draft" ${item.status === 'draft' ? 'selected' : ''}>Draft</option><option value="published" ${item.status === 'published' ? 'selected' : ''}>Published</option><option value="paused" ${item.status === 'paused' ? 'selected' : ''}>Paused</option><option value="verification_needed" ${item.status === 'verification_needed' ? 'selected' : ''}>Verification needed</option></select></label>
+      <label>Schema type<input class="input" id="marketplaceSchemaType" value="${escapeAttr(item.schema_type || 'LocalBusiness')}"></label>
+      <fieldset class="wide marketplace-category-checks"><legend>Categories</legend>${marketplaceCategories.map(category => `<label><input type="checkbox" name="marketplaceCategory" value="${category.id}" ${selectedCategories.has(category.id) ? 'checked' : ''}> ${escapeHtml(category.name)}</label>`).join('')}</fieldset>
+      <label>Location type<select id="marketplaceLocationType"><option value="storefront" ${item.location_type === 'storefront' ? 'selected' : ''}>Storefront</option><option value="service_area" ${item.location_type === 'service_area' ? 'selected' : ''}>Service area</option><option value="online" ${item.location_type === 'online' ? 'selected' : ''}>Online</option></select></label>
+      <label>Location label<input class="input" id="marketplaceLocationLabel" value="${escapeAttr(item.location_label)}" required></label>
+      <label>Filter locations<input class="input" id="marketplaceLocationKeys" value="${escapeAttr((item.location_keys || []).join(', '))}" placeholder="hartford, east-hartford"></label>
+      <label>Area rank<select id="marketplaceRegionRank"><option value="1" ${Number(item.region_rank) === 1 ? 'selected' : ''}>1 · Hartford</option><option value="2" ${Number(item.region_rank) === 2 ? 'selected' : ''}>2 · Greater Hartford</option><option value="3" ${Number(item.region_rank) === 3 ? 'selected' : ''}>3 · Other Connecticut</option><option value="4" ${Number(item.region_rank) === 4 ? 'selected' : ''}>4 · Beyond Hartford</option></select></label>
+      <label>Street address<input class="input" id="marketplaceStreet" value="${escapeAttr(item.street || '')}"></label>
+      <label>City<input class="input" id="marketplaceCity" value="${escapeAttr(item.city || '')}"></label>
+      <label>State<input class="input" id="marketplaceState" value="${escapeAttr(item.state || '')}"></label>
+      <label>Postal code<input class="input" id="marketplacePostalCode" value="${escapeAttr(item.postal_code || '')}"></label>
+      <label class="wide">Secondary address<input class="input" id="marketplaceSecondaryAddress" value="${escapeAttr(item.secondary_address || '')}"></label>
+      <label class="wide">Service area<input class="input" id="marketplaceServiceArea" value="${escapeAttr(item.service_area || '')}"></label>
+      <label>Phone<input class="input" id="marketplacePhone" value="${escapeAttr(item.phone || '')}"></label>
+      <label>Verified date<input class="input" id="marketplaceVerifiedAt" type="date" value="${escapeAttr(item.verified_at || todayIso())}"></label>
+      <label class="wide">Official website<input class="input" id="marketplaceWebsite" type="url" value="${escapeAttr(item.website_url)}" required></label>
+      <label>Primary CTA label<input class="input" id="marketplaceCtaLabel" value="${escapeAttr(item.primary_cta_label)}" required></label>
+      <label>Primary CTA URL<input class="input" id="marketplaceCtaUrl" type="url" value="${escapeAttr(item.primary_cta_url)}" required></label>
+      <label>Secondary CTA label<input class="input" id="marketplaceSecondaryCtaLabel" value="${escapeAttr(item.secondary_cta_label || '')}"></label>
+      <label>Secondary CTA URL<input class="input" id="marketplaceSecondaryCtaUrl" type="url" value="${escapeAttr(item.secondary_cta_url || '')}"></label>
+      <label class="wide">Short card bio<textarea id="marketplaceShortBio" required>${escapeHtml(item.short_bio)}</textarea></label>
+      <label class="wide">Full profile bio<textarea id="marketplaceLongBio" rows="6" required>${escapeHtml(item.long_bio)}</textarea></label>
+      <label>Specialties, comma separated<input class="input" id="marketplaceSpecialties" value="${escapeAttr((item.specialties || []).join(', '))}" required></label>
+      <label>Search tags, comma separated<input class="input" id="marketplaceTags" value="${escapeAttr((item.tags || []).join(', '))}"></label>
+      <label class="wide">Profile FAQs as JSON pairs<textarea id="marketplaceFaq" rows="6" placeholder='[["Question?","Answer."]]'>${escapeHtml(JSON.stringify(item.faq || [], null, 2))}</textarea></label>
+      <label class="wide">Primary image URL<input class="input" id="marketplaceImageUrl" type="url" value="${escapeAttr(item.primary_media?.url || '')}"></label>
+      <label class="wide">Or upload a primary image<input class="input" id="marketplaceImageFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif"></label>
+      <label class="wide">Image alt text<input class="input" id="marketplaceImageAlt" value="${escapeAttr(item.primary_media?.alt_text || '')}" minlength="8" required></label>
+    </div>
+    <div class="marketplace-form-actions"><button class="btn btn-primary" id="saveMarketplaceBusinessBtn" type="submit">Save listing</button><span class="muted">Publishing requires a verified date, category, location, bio, image, and direct CTA.</span></div>
+  </form>`;
+}
+
+function marketplaceFeatureForm(){
+  const tomorrow = addDaysIso(todayIso(), 1);
+  const nextMonth = addDaysIso(todayIso(), 31);
+  return `<form id="marketplaceFeatureForm" class="marketplace-mini-form">
+    <label>Category<select id="featureCategory" required><option value="">Choose category</option>${marketplaceCategories.map(item => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('')}</select></label>
+    <label>Business<select id="featureBusiness" required><option value="">Choose business</option>${marketplaceBusinesses.filter(item => item.status === 'published').map(item => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('')}</select></label>
+    <label>Placement<select id="featurePlacementType"><option value="editorial">RE IMAGE Pick</option><option value="sponsored">Sponsored</option></select></label>
+    <label>Starts<input class="input" id="featureStartsAt" type="date" value="${tomorrow}" required></label>
+    <label>Ends<input class="input" id="featureEndsAt" type="date" value="${nextMonth}" required></label>
+    <label>Invoice reference<input class="input" id="featureInvoice" placeholder="Required for paid placement"></label>
+    <label class="wide">Internal notes<textarea id="featureNotes" placeholder="Campaign terms, owner contact, or renewal notes"></textarea></label>
+    <button class="btn btn-primary wide" type="submit">Schedule placement</button>
+  </form>`;
+}
+
+function marketplaceCategoryForm(){
+  const first = marketplaceCategories[0] || {};
+  return `<form id="marketplaceCategoryForm" class="marketplace-mini-form">
+    <label class="wide">Category<select id="categoryEditorSelect">${marketplaceCategories.map(item => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('')}</select></label>
+    <label>Name<input class="input" id="categoryEditorName" value="${escapeAttr(first.name || '')}" required></label>
+    <label>Short label<input class="input" id="categoryEditorShortName" value="${escapeAttr(first.short_name || '')}" required></label>
+    <label class="wide">SEO description<textarea id="categoryEditorDescription" required>${escapeHtml(first.description || '')}</textarea></label>
+    <label>Display order<input class="input" id="categoryEditorOrder" type="number" value="${Number(first.display_order || 0)}"></label>
+    <label class="marketplace-check"><input id="categoryEditorActive" type="checkbox" ${first.is_active ? 'checked' : ''}> Active</label>
+    <button class="btn btn-light wide" type="submit">Save category</button>
+  </form>`;
+}
+
+function bindMarketplaceEvents(){
+  document.querySelectorAll('[data-marketplace-business-id]').forEach(button => button.addEventListener('click', () => {
+    selectedMarketplaceBusinessId = button.dataset.marketplaceBusinessId;
+    renderMarketplaceManager();
+  }));
+  document.getElementById('newMarketplaceBusinessBtn')?.addEventListener('click', () => {
+    selectedMarketplaceBusinessId = null;
+    renderMarketplaceManager();
+  });
+  document.getElementById('marketplaceBusinessForm')?.addEventListener('submit', saveMarketplaceBusiness);
+  document.getElementById('marketplaceFeatureForm')?.addEventListener('submit', scheduleMarketplaceFeature);
+  document.getElementById('marketplaceCategoryForm')?.addEventListener('submit', saveMarketplaceCategory);
+  document.getElementById('publishMarketplaceBtn')?.addEventListener('click', publishMarketplaceChanges);
+  document.getElementById('categoryEditorSelect')?.addEventListener('change', populateMarketplaceCategoryEditor);
+  document.getElementById('marketplaceName')?.addEventListener('blur', () => {
+    const slug = document.getElementById('marketplaceSlug');
+    if(!slug.value) slug.value = slugFilePart(document.getElementById('marketplaceName').value);
+  });
+}
+
+function marketplaceList(value){
+  return String(value || '').split(',').map(item => item.trim()).filter(Boolean);
+}
+
+function marketplaceMetricTotal(businessId, categoryId, eventType){
+  return marketplaceMetrics
+    .filter(item => item.business_id === businessId && item.category_id === categoryId && item.event_type === eventType)
+    .reduce((total, item) => total + Number(item.event_count || 0), 0);
+}
+
+async function saveMarketplaceBusiness(event){
+  event.preventDefault();
+  const button = document.getElementById('saveMarketplaceBusinessBtn');
+  const notice = document.getElementById('marketplaceNotice');
+  const id = document.getElementById('marketplaceBusinessId').value || null;
+  const categoryIds = [...document.querySelectorAll('input[name="marketplaceCategory"]:checked')].map(input => input.value);
+  const locationType = document.getElementById('marketplaceLocationType').value;
+  if(!categoryIds.length){ showMarketplaceNotice('Choose at least one category.', true); return; }
+  if(locationType === 'storefront' && (!document.getElementById('marketplaceStreet').value.trim() || !document.getElementById('marketplaceCity').value.trim())){ showMarketplaceNotice('Storefront listings need a street address and city.', true); return; }
+  if(locationType !== 'storefront' && !document.getElementById('marketplaceServiceArea').value.trim()){ showMarketplaceNotice('Service-area and online listings need a service area.', true); return; }
+  const imageFile = document.getElementById('marketplaceImageFile').files[0];
+  if(!document.getElementById('marketplaceImageUrl').value.trim() && !imageFile){ showMarketplaceNotice('Add a primary image URL or choose an image to upload.', true); return; }
+  let faq;
+  try{
+    faq = JSON.parse(document.getElementById('marketplaceFaq').value || '[]');
+    if(!Array.isArray(faq) || faq.some(item => !Array.isArray(item) || item.length !== 2)) throw new Error('Invalid FAQ pairs');
+  } catch(error){ showMarketplaceNotice('FAQs must be valid JSON question-and-answer pairs.', true); return; }
+
+  button.disabled = true;
+  button.textContent = 'Saving...';
+  const status = document.getElementById('marketplaceStatus').value;
+  const payload = {
+    slug:document.getElementById('marketplaceSlug').value.trim(), name:document.getElementById('marketplaceName').value.trim(), status,
+    location_type:locationType, location_label:document.getElementById('marketplaceLocationLabel').value.trim(), location_keys:marketplaceList(document.getElementById('marketplaceLocationKeys').value), region_rank:Number(document.getElementById('marketplaceRegionRank').value),
+    street:document.getElementById('marketplaceStreet').value.trim() || null, city:document.getElementById('marketplaceCity').value.trim() || null, state:document.getElementById('marketplaceState').value.trim() || null, postal_code:document.getElementById('marketplacePostalCode').value.trim() || null,
+    secondary_address:document.getElementById('marketplaceSecondaryAddress').value.trim() || null, service_area:document.getElementById('marketplaceServiceArea').value.trim() || null, phone:document.getElementById('marketplacePhone').value.trim() || null,
+    website_url:document.getElementById('marketplaceWebsite').value.trim(), primary_cta_label:document.getElementById('marketplaceCtaLabel').value.trim(), primary_cta_url:document.getElementById('marketplaceCtaUrl').value.trim(), secondary_cta_label:document.getElementById('marketplaceSecondaryCtaLabel').value.trim() || null, secondary_cta_url:document.getElementById('marketplaceSecondaryCtaUrl').value.trim() || null,
+    short_bio:document.getElementById('marketplaceShortBio').value.trim(), long_bio:document.getElementById('marketplaceLongBio').value.trim(), specialties:marketplaceList(document.getElementById('marketplaceSpecialties').value), tags:marketplaceList(document.getElementById('marketplaceTags').value),
+    faq, schema_type:document.getElementById('marketplaceSchemaType').value.trim() || 'LocalBusiness', verified_at:document.getElementById('marketplaceVerifiedAt').value || null, published_at:status === 'published' ? new Date().toISOString() : null
+  };
+
+  const saveResult = id
+    ? await supabase.from('marketplace_businesses').update(payload).eq('id', id).select().single()
+    : await supabase.from('marketplace_businesses').insert(payload).select().single();
+  if(saveResult.error){ button.disabled = false; button.textContent = 'Save listing'; showMarketplaceNotice(saveResult.error.message, true); return; }
+  const businessId = saveResult.data.id;
+
+  const { error:deleteLinksError } = await supabase.from('marketplace_business_categories').delete().eq('business_id', businessId);
+  if(deleteLinksError){ showMarketplaceNotice(deleteLinksError.message, true); button.disabled = false; return; }
+  const { error:linkError } = await supabase.from('marketplace_business_categories').insert(categoryIds.map((categoryId, index) => ({ business_id:businessId, category_id:categoryId, is_primary:index === 0 })));
+  if(linkError){ showMarketplaceNotice(linkError.message, true); button.disabled = false; return; }
+
+  let imageUrl = document.getElementById('marketplaceImageUrl').value.trim();
+  if(imageFile){
+    const filePath = `${payload.slug}/${Date.now()}-${slugFilePart(imageFile.name)}${fileExtension(imageFile.name)}`;
+    const upload = await supabase.storage.from('marketplace-media').upload(filePath, imageFile, { upsert:false, contentType:imageFile.type });
+    if(upload.error){ showMarketplaceNotice(`Listing saved, but image upload failed: ${upload.error.message}`, true); button.disabled = false; return; }
+    imageUrl = supabase.storage.from('marketplace-media').getPublicUrl(upload.data.path).data.publicUrl;
+  }
+  const mediaPayload = { business_id:businessId, url:imageUrl, alt_text:document.getElementById('marketplaceImageAlt').value.trim(), is_primary:true, display_order:0 };
+  const existingMedia = marketplaceBusinesses.find(item => item.id === businessId)?.primary_media;
+  const mediaResult = existingMedia
+    ? await supabase.from('marketplace_media').update(mediaPayload).eq('id', existingMedia.id)
+    : await supabase.from('marketplace_media').insert(mediaPayload);
+  if(mediaResult.error){ showMarketplaceNotice(`Listing saved, but image metadata failed: ${mediaResult.error.message}`, true); button.disabled = false; return; }
+
+  selectedMarketplaceBusinessId = businessId;
+  await renderMarketplaceView();
+  showMarketplaceNotice('Marketplace listing saved. Publish changes when the catalog is ready.');
+}
+
+async function scheduleMarketplaceFeature(event){
+  event.preventDefault();
+  const placementType = document.getElementById('featurePlacementType').value;
+  const invoice = document.getElementById('featureInvoice').value.trim();
+  if(placementType === 'sponsored' && !invoice){ showMarketplaceNotice('Sponsored placements require an invoice reference.', true); return; }
+  const { error } = await supabase.rpc('schedule_marketplace_feature', {
+    feature_category_id:document.getElementById('featureCategory').value,
+    feature_business_id:document.getElementById('featureBusiness').value,
+    feature_placement_type:placementType,
+    feature_starts_at:new Date(`${document.getElementById('featureStartsAt').value}T00:00:00`).toISOString(),
+    feature_ends_at:new Date(`${document.getElementById('featureEndsAt').value}T00:00:00`).toISOString(),
+    feature_invoice_reference:invoice || null,
+    feature_internal_notes:document.getElementById('featureNotes').value.trim() || null
+  });
+  if(error){ showMarketplaceNotice(error.message, true); return; }
+  await renderMarketplaceView();
+  showMarketplaceNotice('Featured placement scheduled.');
+}
+
+function populateMarketplaceCategoryEditor(){
+  const category = marketplaceCategories.find(item => item.id === document.getElementById('categoryEditorSelect').value);
+  if(!category) return;
+  document.getElementById('categoryEditorName').value = category.name;
+  document.getElementById('categoryEditorShortName').value = category.short_name;
+  document.getElementById('categoryEditorDescription').value = category.description;
+  document.getElementById('categoryEditorOrder').value = category.display_order;
+  document.getElementById('categoryEditorActive').checked = category.is_active;
+}
+
+async function saveMarketplaceCategory(event){
+  event.preventDefault();
+  const id = document.getElementById('categoryEditorSelect').value;
+  const { error } = await supabase.from('marketplace_categories').update({
+    name:document.getElementById('categoryEditorName').value.trim(), short_name:document.getElementById('categoryEditorShortName').value.trim(),
+    description:document.getElementById('categoryEditorDescription').value.trim(), display_order:Number(document.getElementById('categoryEditorOrder').value || 0), is_active:document.getElementById('categoryEditorActive').checked
+  }).eq('id', id);
+  if(error){ showMarketplaceNotice(error.message, true); return; }
+  await renderMarketplaceView();
+  showMarketplaceNotice('Category settings saved.');
+}
+
+async function publishMarketplaceChanges(){
+  const button = document.getElementById('publishMarketplaceBtn');
+  button.disabled = true;
+  button.textContent = 'Starting publish...';
+  const { data, error } = await supabase.functions.invoke('publish-marketplace', { body:{ source:'reimage-admin-portal' } });
+  button.disabled = false;
+  button.textContent = 'Publish Marketplace Changes';
+  if(error){ showMarketplaceNotice(`Publish could not start: ${error.message}`, true); return; }
+  showMarketplaceNotice(data?.message || 'Marketplace build started. The live site will update after validation passes.');
+}
+
+function showMarketplaceNotice(message, isError = false){
+  const notice = document.getElementById('marketplaceNotice');
+  if(!notice) return;
+  notice.textContent = message;
+  notice.className = `notice show${isError ? ' error' : ''}`;
+  notice.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+/* =========================
    HELPERS
 ========================= */
 
@@ -3445,6 +3771,8 @@ function serviceOptions(){
   const services = [
     'all',
     'Consultation',
+    'Marketplace Listing',
+    'Featured Marketplace Placement',
     'Growth Foundation',
     'Full Scale System',
     'Website Development',
