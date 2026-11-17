@@ -1,3 +1,4 @@
+import { renderTerminal, terminalCallback, clearTerminal } from './terminal.js';
 import './styles.css';
 import { createClient } from '@supabase/supabase-js';
 import QRCode from 'qrcode';
@@ -55,6 +56,7 @@ const MAX_VIDEO_UPLOAD_BYTES = 5 * 1024 * 1024 * 1024;
 const STATUS_OPTIONS = ['new', 'contacted', 'closed', 'spam'];
 
 async function init(){
+  try { const view = await terminalCallback(); if(view) activeView=view; } catch(e) { console.error(e.message); }
   invoiceData = createBlankInvoice();
   invoiceItems = [createInvoiceItem(DEFAULT_INVOICE_SERVICE)];
   if(!SUPABASE_URL || !SUPABASE_ANON_KEY){
@@ -151,6 +153,8 @@ async function renderAdmin(){
         <div id="stats"></div>
 
         <div class="tabs">
+          <button class="tab ${activeView === 'orders' ? 'active' : ''}" data-view="orders">Orders</button>
+          <button class="tab ${activeView === 'products' ? 'active' : ''}" data-view="products">Products</button>
           <button class="tab ${activeView === 'list' ? 'active' : ''}" data-view="list">List View</button>
           <button class="tab ${activeView === 'calendar' ? 'active' : ''}" data-view="calendar">Calendar View</button>
           <button class="tab ${activeView === 'messages' ? 'active' : ''}" data-view="messages">Messages</button>
@@ -162,7 +166,7 @@ async function renderAdmin(){
           <button class="tab ${activeView === 'marketplace' ? 'active' : ''}" data-view="marketplace">Marketplace</button>
         </div>
 
-        ${['invoice','qr','sales','crm','video','marketplace'].includes(activeView) ? '' : `
+        ${['orders','products','invoice','qr','sales','crm','video','marketplace'].includes(activeView) ? '' : `
           <div class="toolbar">
             <input class="input" id="searchInput" placeholder="Search name, email, business, message..." value="${escapeAttr(filters.search)}">
             <select id="serviceFilter"></select>
@@ -176,6 +180,7 @@ async function renderAdmin(){
     </div>`;
 
   bindTopEvents();
+  if(["orders","products"].includes(activeView)){ renderStats(); await renderTerminal(activeView); return; }
 
   if(activeView === 'invoice'){
     renderStats();
@@ -211,8 +216,9 @@ async function renderAdmin(){
 }
 
 function bindTopEvents(){
-  document.getElementById('signOutBtn').addEventListener('click', () => supabase.auth.signOut());
+  document.getElementById('signOutBtn').addEventListener('click', () => { clearTerminal(); supabase.auth.signOut(); });
   document.getElementById('refreshBtn').addEventListener('click', () => {
+    if(['orders','products'].includes(activeView)){ renderTerminal(activeView); return; }
     if(activeView === 'invoice'){
       renderInvoiceView();
     } else if(activeView === 'qr'){

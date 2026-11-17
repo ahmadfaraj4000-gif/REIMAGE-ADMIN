@@ -1914,3 +1914,5 @@ tr:hover,tr.active,.sales-row:hover,.sales-row.active,.message-thread-row:hover,
 .video-file-pill span{color:var(--portal-muted);font-size:.84rem;margin-top:.25rem}
 .video-submissions-table table{min-width:860px}
 @media(max-width:760px){.video-send-form{grid-template-columns:1fr}.video-sender-layout{grid-template-columns:1fr}}
+
+.terminal-panel{background:#fff;padding:24px;border-radius:16px}.terminal-products{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin:20px 0}.terminal-panel label{display:grid;gap:8px}.terminal-table{width:100%;border-collapse:collapse}.terminal-table th,.terminal-table td{padding:12px;text-align:left;border-bottom:1px solid #dde3e9}
