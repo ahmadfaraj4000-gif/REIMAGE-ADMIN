@@ -150,7 +150,7 @@ async function renderAdmin(){
       </header>
 
       <main class="main">
-        <div id="stats"></div>
+        <div id="stats" ${activeView === 'products' ? 'hidden' : ''}></div>
 
         <div class="tabs">
           <button class="tab ${activeView === 'orders' ? 'active' : ''}" data-view="orders">Orders</button>
