@@ -40,13 +40,13 @@ async function request(path,body){
 export function clearTerminal(){token=null;sessionStorage.removeItem('terminal.auth');}
 export async function renderTerminal(view){
  const root=document.getElementById('contentArea');
- root.innerHTML=`<section class="terminal-panel">${view==='orders'?'<h2>Successful orders</h2><p>Live payments · RE IMAGE Business Solutions</p>':''}<div id="terminal-body"></div></section>`;
+ root.innerHTML=`<section class="terminal-panel ${view==='orders'?'orders-panel':''}">${view==='orders'?'<header class="orders-heading"><span class="pos-eyebrow">PAYMENT HISTORY</span><h2>Successful orders</h2><p>Live payments · RE IMAGE Business Solutions</p></header>':''}<div id="terminal-body"></div></section>`;
  const body=root.querySelector('#terminal-body');
  if(!token){body.innerHTML='<p>Connect your Terminal account to access live orders and send payments to your reader.</p><button class="btn btn-primary" id="terminal-login">Connect Terminal account</button>';body.querySelector('button').onclick=()=>login(view);return;}
  try{
  if(view==='orders'){
  const rows=(await request(`/v1/admin/tenants/${tenant}/payments`)).filter(p=>p.state==='SUCCEEDED').sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
- body.innerHTML=`<p>${rows.length} successful payments · ${money(rows.reduce((s,p)=>s+p.amount,0))} collected</p><div style="overflow:auto"><table class="terminal-table"><thead><tr><th>Date</th><th>Order</th><th>Paid</th><th>Method</th><th>Received</th><th>Change</th><th>Status</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${esc(new Date(p.createdAt).toLocaleString())}</td><td>${esc(p.orderId)}</td><td>${money(p.amount)}</td><td>${p.paymentMethod==='cash'?'Cash':'Card'}</td><td>${p.paymentMethod==='cash'?money(p.cashReceived):'—'}</td><td>${p.paymentMethod==='cash'?money(p.changeDue):'—'}</td><td>Paid${p.orderSynced?'':' · syncing order'}</td></tr>`).join('')||'<tr><td colspan="7">No successful Terminal payments yet.</td></tr>'}</tbody></table></div>`;return;
+ body.innerHTML=`<div class="orders-summary"><div><span>Successful payments</span><strong>${rows.length}</strong></div><div><span>Total collected</span><strong>${money(rows.reduce((s,p)=>s+p.amount,0))}</strong></div></div><div class="orders-table-wrap" tabindex="0" role="region" aria-label="Successful payments table"><table class="terminal-table"><thead><tr><th>Date</th><th>Order</th><th>Paid</th><th>Method</th><th>Received</th><th>Change</th><th>Status</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${esc(new Date(p.createdAt).toLocaleString())}</td><td>${esc(p.orderId)}</td><td>${money(p.amount)}</td><td>${p.paymentMethod==='cash'?'Cash':'Card'}</td><td>${p.paymentMethod==='cash'?money(p.cashReceived):'—'}</td><td>${p.paymentMethod==='cash'?money(p.changeDue):'—'}</td><td>Paid${p.orderSynced?'':' · syncing order'}</td></tr>`).join('')||'<tr class="orders-empty"><td colspan="7"><h3>No successful payments yet</h3><p>Completed card payments and confirmed cash sales will appear here.</p></td></tr>'}</tbody></table></div>`;return;
  }
  let waiting;
  if(pending){

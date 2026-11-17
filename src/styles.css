@@ -2000,3 +2000,35 @@ tr:hover,tr.active,.sales-row:hover,.sales-row.active,.message-thread-row:hover,
 @media (min-width:740px) and (max-width:900px), (min-width:1024px) {
   .pos-layout .pos-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
 }
+
+/* Payment history has its own spacing and typography, separate from CRM tables. */
+.terminal-panel.orders-panel { padding:36px; border:1px solid #e0e7ef; border-radius:24px; }
+.orders-heading { margin-bottom:32px; }
+.orders-heading h2 { font:700 30px/1.2 Barlow,sans-serif; text-transform:none; margin:10px 0 12px; }
+.orders-heading p { color:#63778a; font-size:15px; line-height:1.6; }
+.orders-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; margin-bottom:36px; }
+.orders-summary > div { padding:24px; background:#f8fafc; border:1px solid #e2e9f0; border-radius:16px; display:grid; gap:12px; }
+.orders-summary span { color:#63778a; font-size:14px; line-height:1.4; }
+.orders-summary strong { color:#142c40; font-size:30px; font-weight:700; line-height:1.2; font-variant-numeric:tabular-nums; }
+.orders-table-wrap { overflow-x:auto; border:1px solid #e2e9f0; border-radius:14px; -webkit-overflow-scrolling:touch; }
+.orders-panel .terminal-table { min-width:900px; margin:0; }
+.orders-panel .terminal-table th { position:static; padding:20px 24px; background:#f5f8fb; font-size:12px; letter-spacing:.06em; white-space:nowrap; }
+.orders-panel .terminal-table td { padding:24px; line-height:1.6; vertical-align:middle; font-size:14px; }
+.orders-panel .terminal-table td:nth-child(2) { max-width:250px; overflow-wrap:anywhere; }
+.orders-panel .terminal-table td:nth-child(n+3):nth-child(-n+6) { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.orders-panel .terminal-table tr { cursor:default; }
+.orders-panel .terminal-table tbody tr:last-child td { border-bottom:0; }
+.orders-panel .terminal-table .orders-empty td { height:200px; text-align:center; padding:48px 24px; }
+.orders-empty h3 { font:600 20px/1.4 Barlow,sans-serif; text-transform:none; margin:0 0 12px; }
+.orders-empty p { color:#63778a; font-size:14px; line-height:1.6; }
+@media(max-width:900px) {
+ .terminal-panel.orders-panel { padding:24px; }
+ .orders-summary { gap:16px; margin-bottom:28px; }
+ .orders-panel .terminal-table th,.orders-panel .terminal-table td { padding:20px; }
+}
+@media(max-width:540px) {
+ .terminal-panel.orders-panel { padding:20px; }
+ .orders-heading h2 { font-size:26px; }
+ .orders-summary { grid-template-columns:1fr; }
+ .orders-summary > div { padding:20px; }
+}
