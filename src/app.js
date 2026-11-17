@@ -135,7 +135,7 @@ async function handleLogin(e){
 
 async function renderAdmin(){
   app.innerHTML = `
-    <div class="admin-shell">
+    <div class="admin-shell ${['orders','products'].includes(activeView) ? 'terminal-workspace' : ''}">
       <header class="topbar">
         <div class="brand">
           <img src="/logo.png" alt="RE IMAGE logo" onerror="this.style.display='none'">
