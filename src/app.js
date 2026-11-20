@@ -1,3 +1,4 @@
+import { openProjects } from './contract-projects.js';
 import { renderTerminal, terminalCallback, clearTerminal } from './terminal.js';
 import './styles.css';
 import { createClient } from '@supabase/supabase-js';
@@ -180,7 +181,7 @@ async function renderAdmin(){
     </div>`;
 
   bindTopEvents();
-  if(["orders","products"].includes(activeView)){ renderStats(); await renderTerminal(activeView); return; }
+  if(["orders","products"].includes(activeView)){ renderStats(); await renderTerminal(activeView, supabase); return; }
 
   if(activeView === 'invoice'){
     renderStats();
@@ -218,7 +219,7 @@ async function renderAdmin(){
 function bindTopEvents(){
   document.getElementById('signOutBtn').addEventListener('click', () => { clearTerminal(); supabase.auth.signOut(); });
   document.getElementById('refreshBtn').addEventListener('click', () => {
-    if(['orders','products'].includes(activeView)){ renderTerminal(activeView); return; }
+    if(['orders','products'].includes(activeView)){ renderTerminal(activeView, supabase); return; }
     if(activeView === 'invoice'){
       renderInvoiceView();
     } else if(activeView === 'qr'){
@@ -2898,6 +2899,7 @@ function renderInvoiceView(){
         </div>
 
         <div class="ri-invoice-action-buttons">
+          <button type="button" class="btn btn-light" id="invoiceProjects">Project orders</button>
           <button class="btn ${invoiceMode === 'edit' ? 'btn-primary' : 'btn-secondary'}" id="invoiceEditBtn">Edit</button>
           <button class="btn ${invoiceMode === 'preview' ? 'btn-primary' : 'btn-secondary'}" id="invoicePreviewBtn">Preview</button>
           <button class="btn btn-light" id="invoiceClearBtn">Clear</button>
@@ -2914,6 +2916,7 @@ function renderInvoiceView(){
       </div>
     </section>`;
 
+  area.querySelector('#invoiceProjects').onclick = () => openProjects(supabase);
   bindInvoiceEvents();
 }
 

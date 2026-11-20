@@ -2032,3 +2032,15 @@ tr:hover,tr.active,.sales-row:hover,.sales-row.active,.message-thread-row:hover,
  .orders-summary { grid-template-columns:1fr; }
  .orders-summary > div { padding:20px; }
 }
+
+.contract-dialog { width: min(38rem, 94vw); max-height: 85vh; border: 0; border-radius: 14px; padding: 1.5rem; color: #0c1f2e; }
+.contract-dialog::backdrop { background: rgb(12 31 46 / 60%); }
+.contract-dialog header, .contract-search { display: flex; align-items: center; gap: 1rem; justify-content: space-between; }
+.contract-dialog h2 { margin: 0; }
+.contract-body, .contract-form, .contract-schedule { display: grid; gap: .75rem; }
+.contract-body { margin-top: 1rem; }
+.contract-body label { display: grid; gap: .3rem; }
+.contract-body p { margin: .5rem 0; }
+.contract-results details { padding: .8rem 0; border-bottom: 1px solid #d9e5ec; overflow-wrap: anywhere; }
+.contract-results summary { cursor: pointer; font-weight: 600; }
+.contract-preview { white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; }
